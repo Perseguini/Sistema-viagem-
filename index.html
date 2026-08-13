@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Sistema Perseguini</title>
+<meta name="theme-color" content="#0F1229">
+<meta name="description" content="Controle de viagens e fretes - Sistema Perseguini">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Perseguini">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== TOPBAR ===== -->
+  <div class="topbar" id="topbar">
+    <div class="brand">
+      <div class="brand-badge">🚛</div>
+      <div class="brand-text">
+        <span class="title">Sistema Perseguini</span>
+        <span class="subtitle" id="topbarSubtitle">Controle de viagens e fretes</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN: INÍCIO ===== -->
+  <section class="screen active" id="screen-inicio">
+    <div class="hero">
+      <p class="greeting">
+        <span id="greetingText">Olá, Motorista! 👋</span>
+        <button class="edit-name" id="editNameBtn">editar</button>
+      </p>
+      <p class="sub">Bem-vindo ao seu sistema de controle de viagens e fretes.</p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card blue">
+        <div class="icon">🧾</div>
+        <div class="value" id="statTrips">0</div>
+        <div class="label">viagens realizadas</div>
+      </div>
+      <div class="stat-card green">
+        <div class="icon">💰</div>
+        <div class="value" id="statLiquido">R$ 0,00</div>
+        <div class="label">líquido acumulado</div>
+      </div>
+    </div>
+
+    <div class="install-card" id="installCard" style="display:none;">
+      <div class="ic">📲</div>
+      <div class="txt">
+        <div class="t1">Instalar aplicativo</div>
+        <div class="t2">Tenha acesso rápido, mesmo offline</div>
+      </div>
+      <button id="installBtn">Instalar</button>
+    </div>
+
+    <div class="section-head">
+      <h3>Última viagem</h3>
+      <span class="link" data-goto="historico">Ver todas</span>
+    </div>
+    <div id="lastTripWrap"></div>
+  </section>
+
+  <!-- ===== SCREEN: NOVA VIAGEM ===== -->
+  <section class="screen" id="screen-nova">
+    <div class="form-wrap">
+      <div class="form-card">
+        <p class="fc-title">Dados da viagem</p>
+        <div class="field">
+          <label for="fDestino">Destino</label>
+          <input type="text" id="fDestino" placeholder="Ex: Curitiba - PR" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="fData">Data da viagem</label>
+          <input type="datetime-local" id="fData">
+        </div>
+      </div>
+
+      <div class="form-card">
+        <p class="fc-title">Valores</p>
+        <div class="field">
+          <label for="fFrete">Frete (R$)</label>
+          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fFrete" placeholder="0,00"></div>
+        </div>
+        <div class="field">
+          <label for="fDiesel">Diesel (R$)</label>
+          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fDiesel" placeholder="0,00"></div>
+        </div>
+        <div class="field">
+          <label for="fPedagio">Pedágio (R$)</label>
+          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fPedagio" placeholder="0,00"></div>
+        </div>
+        <div class="field">
+          <label for="fBorracharia">Borracharia (R$)</label>
+          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fBorracharia" placeholder="0,00"></div>
+        </div>
+        <div class="field">
+          <label for="fCaixinha">Caixinha (R$)</label>
+          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fCaixinha" placeholder="0,00"></div>
+        </div>
+        <div class="field">
+          <label for="fOutros">Outros (R$)</label>
+          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fOutros" placeholder="0,00"></div>
+        </div>
+        <div class="field">
+          <label for="fComissao">Comissão (%)</label>
+          <input inputmode="decimal" id="fComissao" placeholder="0">
+        </div>
+      </div>
+
+      <div class="summary-box">
+        <p class="fc-title">Resumo da viagem</p>
+        <div class="sum-row"><span>Total de gastos</span><span id="sumGastos">R$ 0,00</span></div>
+        <div class="sum-row"><span>Líquido da viagem</span><span id="sumLiquido">R$ 0,00</span></div>
+        <div class="sum-row total commission">
+          <span class="lbl" id="sumComissaoLabel">Comissão</span>
+          <span class="val" id="sumComissao">R$ 0,00</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-outline" id="btnLimpar">🗑️ Limpar</button>
+        <button class="btn btn-primary" id="btnSalvar">💾 Salvar viagem</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SCREEN: HISTÓRICO ===== -->
+  <section class="screen" id="screen-historico">
+    <div class="selector-row">
+      <select id="selYear"></select>
+    </div>
+    <div id="monthsWrap"></div>
+  </section>
+
+  <!-- ===== BOTTOM NAV ===== -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="inicio">
+      <span class="nb-icon">🏠</span>
+      <span class="nb-label">Início</span>
+    </button>
+    <button class="nav-btn" data-tab="nova">
+      <span class="nb-icon">➕</span>
+      <span class="nb-label">Nova viagem</span>
+    </button>
+    <button class="nav-btn" data-tab="historico">
+      <span class="nb-icon">📋</span>
+      <span class="nb-label">Histórico</span>
+    </button>
+  </nav>
+
+  <!-- ===== TRIP DETAIL / SHARE MODAL ===== -->
+  <div class="modal-overlay" id="tripModal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <h3>Resumo da viagem</h3>
+        <button class="close-btn" id="closeModalBtn">✕</button>
+      </div>
+
+      <div class="resumo-card" id="resumoCard">
+        <div class="resumo-header">
+          <p class="rh-title">Sistema Perseguini</p>
+          <p class="rh-sub">Resumo da viagem</p>
+        </div>
+        <div class="resumo-body" id="resumoBody"></div>
+      </div>
+
+      <div class="sheet-actions">
+        <button class="btn btn-outline" id="btnDeleteTrip">🗑️ Excluir</button>
+        <button class="btn btn-secondary" id="btnDownloadImg">🖼️ Baixar imagem</button>
+        <button class="btn btn-primary" id="btnShareImg">📤 Compartilhar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<canvas id="renderCanvas" style="display:none;"></canvas>
+
+<script src="app.js"></script>
+</body>
+</html>
