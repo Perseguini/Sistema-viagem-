@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  const APP_VERSION = "14/08/2026 01:10";
+
   /* ---------------- Storage helpers ---------------- */
   const STORE_KEY = "perseguini_trips_v1";
   const NAME_KEY = "perseguini_name_v1";
@@ -665,6 +667,33 @@
       navigator.serviceWorker.register("sw.js").catch(() => {});
     });
   }
+
+  /* ---------------- Manual update check ---------------- */
+  document.getElementById("appVersionLabel").textContent = `Versão: ${APP_VERSION}`;
+
+  document.getElementById("checkUpdateBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("checkUpdateBtn");
+    btn.disabled = true;
+    btn.textContent = "🔄 Verificando...";
+    toast("Buscando a versão mais recente...");
+
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch (e) {
+      /* ignore and reload anyway */
+    }
+
+    setTimeout(() => {
+      location.reload(true);
+    }, 400);
+  });
 
   /* ---------------- Init ---------------- */
   resetForm();
