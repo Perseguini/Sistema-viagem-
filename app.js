@@ -283,6 +283,7 @@
 
   /* ---------------- Histórico screen ---------------- */
   const selYear = document.getElementById("selYear");
+  const selMonth = document.getElementById("selMonth");
 
   function availableYears() {
     const years = new Set(trips.map((t) => new Date(t.data).getFullYear()));
@@ -292,77 +293,125 @@
 
   function renderHistorico() {
     const years = availableYears();
-    const prevSelected = selYear.value ? parseInt(selYear.value, 10) : new Date().getFullYear();
+    const prevYear = selYear.value ? parseInt(selYear.value, 10) : new Date().getFullYear();
     selYear.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join("");
-    selYear.value = years.includes(prevSelected) ? String(prevSelected) : String(years[0]);
-    renderMonths(parseInt(selYear.value, 10));
+    selYear.value = years.includes(prevYear) ? String(prevYear) : String(years[0]);
+
+    if (!selMonth.dataset.built) {
+      selMonth.innerHTML = MONTH_NAMES.map((name, i) => `<option value="${i}">${name}</option>`).join("");
+      selMonth.dataset.built = "1";
+      selMonth.value = String(new Date().getMonth());
+    }
+
+    renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10));
   }
 
-  selYear.addEventListener("change", () => renderMonths(parseInt(selYear.value, 10)));
+  selYear.addEventListener("change", () => renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10)));
+  selMonth.addEventListener("change", () => renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10)));
 
-  let openMonthIndex = null;
+  document.getElementById("filterBtn").addEventListener("click", () => {
+    document.querySelector(".period-box").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
-  function renderMonths(year) {
+  function tripsForMonth(year, month) {
+    return trips
+      .filter((t) => {
+        const d = new Date(t.data);
+        return d.getFullYear() === year && d.getMonth() === month;
+      })
+      .sort((a, b) => new Date(b.data) - new Date(a.data));
+  }
+
+  function renderMonths(year, month) {
     const wrap = document.getElementById("monthsWrap");
     wrap.innerHTML = "";
 
-    const byMonth = Array.from({ length: 12 }, () => []);
-    trips.forEach((t) => {
-      const d = new Date(t.data);
-      if (d.getFullYear() === year) byMonth[d.getMonth()].push(t);
-    });
+    /* ---- Selected month: detailed card ---- */
+    const selectedTrips = tripsForMonth(year, month);
+    const selectedTotal = selectedTrips.reduce((acc, t) => acc + computeTrip(t).liquido, 0);
 
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const defaultOpen = year === currentYear ? currentMonth : 11;
+    const detailWrap = document.createElement("div");
+    detailWrap.className = "month-detail";
+
+    const head = document.createElement("div");
+    head.className = "month-detail-head";
+    head.innerHTML = `
+      <span class="name">${MONTH_NAMES[month]} de ${year}</span>
+      <span class="totals">
+        <div class="total-val">${fmtMoney(selectedTotal)}</div>
+        <div class="total-count">${selectedTrips.length} ${selectedTrips.length === 1 ? "viagem" : "viagens"}</div>
+      </span>`;
+    detailWrap.appendChild(head);
+
+    if (!selectedTrips.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.innerHTML = `
+        <div class="emoji">🗓️</div>
+        <div class="title">Nenhuma viagem neste mês</div>
+        <div class="desc">Escolha outro mês ou registre uma nova viagem.</div>`;
+      detailWrap.appendChild(empty);
+    } else {
+      selectedTrips.forEach((t) => {
+        const c = computeTrip(t);
+        const card = document.createElement("div");
+        card.className = "trip-detail-card";
+        card.innerHTML = `
+          <div class="trip-detail-top">
+            <div class="left">
+              <div class="pin">📍</div>
+              <div>
+                <div class="dest">${escapeHtml(t.destino || "Sem destino")}</div>
+                <div class="date">${fmtDate(t.data)}</div>
+              </div>
+            </div>
+            <button class="menu-btn" data-id="${t.id}" aria-label="Opções">⋮</button>
+          </div>
+          <div class="trip-detail-rows">
+            <div class="tdr"><span class="l">Frete</span><span class="v">${fmtMoney(c.frete)}</span></div>
+            <div class="tdr"><span class="l">Gastos</span><span class="v expense">${fmtMoney(c.totalGastos)}</span></div>
+            <div class="tdr"><span class="l">Comissão (${c.comissaoPct}%)</span><span class="v expense">${fmtMoney(c.comissaoValor)}</span></div>
+          </div>
+          <div class="liquido-pill">
+            <span class="l">Líquido</span>
+            <span class="v">${fmtMoney(c.liquido)}</span>
+          </div>`;
+        card.querySelector(".menu-btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          openTripModal(t.id);
+        });
+        card.addEventListener("click", () => openTripModal(t.id));
+        detailWrap.appendChild(card);
+      });
+    }
+
+    wrap.appendChild(detailWrap);
+
+    /* ---- Other months: summary rows ---- */
+    const label = document.createElement("div");
+    label.className = "other-months-label";
+    label.textContent = "Outros meses";
+    wrap.appendChild(label);
 
     for (let m = 11; m >= 0; m--) {
-      const monthTrips = byMonth[m].sort((a, b) => new Date(b.data) - new Date(a.data));
-      const totalLiquido = monthTrips.reduce((acc, t) => acc + computeTrip(t).liquido, 0);
+      if (m === month) continue;
+      const mTrips = tripsForMonth(year, m);
+      const mTotal = mTrips.reduce((acc, t) => acc + computeTrip(t).liquido, 0);
 
-      const block = document.createElement("div");
-      block.className = "month-block";
-
-      const header = document.createElement("div");
-      header.className = "month-header";
-      header.innerHTML = `
-        <div class="name">${MONTH_NAMES[m]} de ${year}
-          <span class="count">${monthTrips.length} ${monthTrips.length === 1 ? "viagem" : "viagens"}</span>
+      const row = document.createElement("div");
+      row.className = "month-summary-row";
+      row.innerHTML = `
+        <div>
+          <div class="name">${MONTH_NAMES[m]} de ${year}</div>
+          <div class="count">${mTrips.length} ${mTrips.length === 1 ? "viagem" : "viagens"}</div>
         </div>
-        <div class="total ${monthTrips.length ? "" : "zero"}">${fmtMoney(totalLiquido)}</div>`;
-      header.style.cursor = "pointer";
-
-      const tripsWrap = document.createElement("div");
-      tripsWrap.className = "month-trips" + (m === defaultOpen && monthTrips.length ? " open" : "");
-
-      if (monthTrips.length) {
-        monthTrips.forEach((t) => {
-          const c = computeTrip(t);
-          const row = document.createElement("div");
-          row.className = "trip-row";
-          row.innerHTML = `
-            <div class="info">
-              <div class="dest">📍 ${escapeHtml(t.destino || "Sem destino")}</div>
-              <div class="date">${fmtDate(t.data)}</div>
-            </div>
-            <div class="amt">${fmtMoney(c.liquido)}<div class="chev">Ver detalhes ›</div></div>`;
-          row.addEventListener("click", (e) => {
-            e.stopPropagation();
-            openTripModal(t.id);
-          });
-          tripsWrap.appendChild(row);
-        });
-      } else {
-        tripsWrap.innerHTML = `<div style="padding:14px 10px;font-size:12.5px;color:var(--text-faint);">Nenhuma viagem registrada neste mês.</div>`;
-      }
-
-      header.addEventListener("click", () => {
-        tripsWrap.classList.toggle("open");
+        <div class="val ${mTrips.length ? "has-data" : ""}">${fmtMoney(mTotal)}</div>`;
+      row.addEventListener("click", () => {
+        selMonth.value = String(m);
+        renderMonths(year, m);
+        wrap.scrollIntoView({ behavior: "smooth", block: "start" });
       });
-
-      block.appendChild(header);
-      block.appendChild(tripsWrap);
-      wrap.appendChild(block);
+      wrap.appendChild(row);
     }
   }
 

@@ -472,17 +472,59 @@ button, input, select {
 .btn-outline { background: var(--card); color: var(--text-soft); border: 1.5px solid var(--border); }
 .btn-secondary { background: var(--navy); color: #fff; }
 
-/* History */
+/* Period selector box */
+.period-box {
+  margin: 16px 16px 8px;
+  background: var(--purple-soft);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.period-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.period-desc {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  margin: 4px 0 14px;
+  font-weight: 500;
+}
+
+.filter-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.filter-btn span {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--purple);
+}
+.filter-btn span:nth-child(1) { width: 16px; }
+.filter-btn span:nth-child(2) { width: 11px; }
+.filter-btn span:nth-child(3) { width: 6px; }
+
 .selector-row {
   display: flex;
   gap: 10px;
-  padding: 4px 16px 6px;
 }
 
 .selector-row select {
   flex: 1;
-  border: 1.5px solid var(--border);
-  background: var(--card);
+  border: 1.5px solid rgba(108,93,211,0.25);
+  background: #fff;
   border-radius: var(--radius-sm);
   padding: 11px 12px;
   font-size: 14px;
@@ -490,65 +532,98 @@ button, input, select {
   color: var(--text);
 }
 
-.month-block {
-  margin: 6px 16px 12px;
+/* Selected month — detailed card */
+.month-detail {
+  margin: 18px 16px 6px;
+}
+
+.month-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px 10px;
+}
+
+.month-detail-head .name {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--purple-dark);
+}
+
+.month-detail-head .totals { text-align: right; }
+.month-detail-head .total-val { font-size: 15px; font-weight: 800; color: var(--text); }
+.month-detail-head .total-count { font-size: 11.5px; color: var(--text-faint); font-weight: 600; margin-top: 1px; }
+
+.trip-detail-card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  padding: 14px;
+  margin-bottom: 10px;
 }
 
-.month-header {
+.trip-detail-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  margin-bottom: 10px;
 }
 
-.month-header .name {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text);
+.trip-detail-top .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.trip-detail-top .dest { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.trip-detail-top .date { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
+.trip-detail-top .menu-btn {
+  border: none; background: transparent; color: var(--text-faint);
+  font-size: 17px; padding: 4px 6px; line-height: 1;
+}
+
+.trip-detail-rows { padding: 2px 0 10px; }
+.tdr {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 13.5px;
 }
+.tdr .l { color: var(--text-soft); font-weight: 600; }
+.tdr .v { font-weight: 700; color: var(--text); }
+.tdr .v.expense { color: var(--red); }
 
-.month-header .count {
+.liquido-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--green-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.liquido-pill .l { font-size: 13.5px; font-weight: 800; color: var(--text); }
+.liquido-pill .v { font-size: 16px; font-weight: 900; color: var(--green); }
+
+/* Other months — summary rows */
+.other-months-label {
+  padding: 4px 18px 8px;
   font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-faint);
-}
-
-.month-header .total {
-  font-size: 14.5px;
   font-weight: 800;
-  color: var(--green);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 
-.month-header .total.zero { color: var(--text-faint); }
-
-.month-trips {
-  border-top: 1px solid var(--border);
-  padding: 8px 10px;
-  display: none;
-}
-.month-trips.open { display: block; }
-
-.trip-row {
-  padding: 10px 8px;
-  border-radius: 12px;
+.month-summary-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin: 0 16px 10px;
 }
-.trip-row:active { background: var(--bg); }
-
-.trip-row .info .dest { font-size: 13.5px; font-weight: 700; color: var(--text); }
-.trip-row .info .date { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
-.trip-row .amt { font-size: 13.5px; font-weight: 800; color: var(--green); text-align: right; white-space: nowrap; }
-.trip-row .chev { color: var(--text-faint); font-size: 13px; margin-left: 4px; }
+.month-summary-row .name { font-size: 14px; font-weight: 800; color: var(--text); }
+.month-summary-row .count { font-size: 11.5px; color: var(--text-faint); font-weight: 600; margin-top: 1px; }
+.month-summary-row .val { font-size: 14px; font-weight: 800; color: var(--text-faint); }
+.month-summary-row .val.has-data { color: var(--green); }
+.month-summary-row:active { background: var(--bg); }
 
 /* Bottom nav */
 .bottom-nav {

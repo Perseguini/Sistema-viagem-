@@ -133,9 +133,20 @@
 
   <!-- ===== SCREEN: HISTÓRICO ===== -->
   <section class="screen" id="screen-historico">
-    <div class="selector-row">
-      <select id="selYear"></select>
+    <div class="period-box">
+      <div class="period-box-head">
+        <p class="fc-title" style="margin:0;">Selecione o período</p>
+        <button class="filter-btn" id="filterBtn" aria-label="Filtro">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+      <p class="period-desc">Navegue por ano e mês para visualizar suas viagens.</p>
+      <div class="selector-row">
+        <select id="selYear"></select>
+        <select id="selMonth"></select>
+      </div>
     </div>
+
     <div id="monthsWrap"></div>
   </section>
 

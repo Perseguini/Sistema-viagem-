@@ -1,4 +1,4 @@
-const CACHE_NAME = "perseguini-cache-v1";
+const CACHE_NAME = "perseguini-cache-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,19 +23,28 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/*
+ * Network-first strategy: whenever the phone has a connection, it always
+ * fetches the latest file from GitHub Pages and updates the offline copy.
+ * Only when the network request fails (no signal) does it fall back to
+ * the last saved copy, so editing the code on GitHub is reflected the
+ * next time the app opens online — no reinstall needed.
+ */
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200 && event.request.method === "GET") {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match("./index.html"));
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) => cached || caches.match("./index.html"))
+      )
   );
 });
+
