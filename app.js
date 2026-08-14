@@ -142,8 +142,6 @@
     document.getElementById("greetingText").textContent = `Olá, ${getName()}! 👋`;
 
     document.getElementById("statTrips").textContent = trips.length;
-    const totalLiquido = trips.reduce((acc, t) => acc + computeTrip(t).liquido, 0);
-    document.getElementById("statLiquido").textContent = fmtMoney(totalLiquido);
 
     const wrap = document.getElementById("lastTripWrap");
     if (!trips.length) {
@@ -174,8 +172,8 @@
         </div>
       </div>
       <div class="right">
-        <div class="liquido">${fmtMoney(c.liquido)}</div>
-        <div class="liquido-label">líquido</div>
+        <div class="liquido commission">${fmtMoney(c.comissaoValor)}</div>
+        <div class="liquido-label">comissão</div>
       </div>`;
     div.addEventListener("click", () => openTripModal(t.id));
     return div;

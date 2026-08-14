@@ -193,6 +193,7 @@ button, input, select {
   gap: 12px;
   margin: 14px 16px;
 }
+.stat-row.single { grid-template-columns: 1fr; }
 
 .stat-card {
   background: var(--card);
@@ -308,6 +309,7 @@ button, input, select {
   font-weight: 800;
   color: var(--green);
 }
+.trip-item .liquido.commission { color: var(--purple-dark); }
 
 .trip-item .liquido-label {
   font-size: 10.5px;
