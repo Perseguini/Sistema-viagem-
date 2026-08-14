@@ -19,12 +19,18 @@
 
   <!-- ===== TOPBAR ===== -->
   <div class="topbar" id="topbar">
-    <div class="brand">
+    <div class="brand" id="topbarBrand">
       <div class="brand-badge">🚛</div>
       <div class="brand-text">
         <span class="title">Sistema Perseguini</span>
         <span class="subtitle" id="topbarSubtitle">Controle de viagens e fretes</span>
       </div>
+    </div>
+    <div class="topbar-title-row" id="topbarTitleRow" style="display:none;">
+      <h2 id="topbarTitleText">Histórico de viagens</h2>
+      <button class="filter-btn" id="filterBtn" aria-label="Filtro">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </div>
 
@@ -134,12 +140,7 @@
   <!-- ===== SCREEN: HISTÓRICO ===== -->
   <section class="screen" id="screen-historico">
     <div class="period-box">
-      <div class="period-box-head">
-        <p class="fc-title" style="margin:0;">Selecione o período</p>
-        <button class="filter-btn" id="filterBtn" aria-label="Filtro">
-          <span></span><span></span><span></span>
-        </button>
-      </div>
+      <p class="fc-title" style="margin:0;">Selecione o período</p>
       <p class="period-desc">Navegue por ano e mês para visualizar suas viagens.</p>
       <div class="selector-row">
         <select id="selYear"></select>

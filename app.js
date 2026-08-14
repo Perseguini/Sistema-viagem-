@@ -105,7 +105,18 @@
   function goTo(tab) {
     Object.keys(screens).forEach((k) => screens[k].classList.toggle("active", k === tab));
     navBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
-    topbarSubtitle.textContent = subtitles[tab] || subtitles.inicio;
+
+    const brandRow = document.getElementById("topbarBrand");
+    const titleRow = document.getElementById("topbarTitleRow");
+    if (tab === "historico") {
+      brandRow.style.display = "none";
+      titleRow.style.display = "flex";
+    } else {
+      brandRow.style.display = "flex";
+      titleRow.style.display = "none";
+      topbarSubtitle.textContent = subtitles[tab] || subtitles.inicio;
+    }
+
     if (tab === "historico") renderHistorico();
     if (tab === "inicio") renderInicio();
     window.scrollTo(0, 0);

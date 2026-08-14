@@ -115,6 +115,20 @@ button, input, select {
 
 .topbar .spacer36 { width: 36px; }
 
+.topbar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.topbar-title-row h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
 /* Screens */
 .screen {
   display: none;
@@ -480,12 +494,6 @@ button, input, select {
   padding: 16px;
 }
 
-.period-box-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .period-desc {
   font-size: 12.5px;
   color: var(--text-soft);
@@ -494,11 +502,11 @@ button, input, select {
 }
 
 .filter-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   border: none;
-  background: #fff;
+  background: var(--navy);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -510,7 +518,7 @@ button, input, select {
   display: block;
   height: 2px;
   border-radius: 2px;
-  background: var(--purple);
+  background: #fff;
 }
 .filter-btn span:nth-child(1) { width: 16px; }
 .filter-btn span:nth-child(2) { width: 11px; }
