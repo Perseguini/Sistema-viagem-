@@ -23,17 +23,25 @@
     <h1>Sistema Perseguini</h1>
     <p>Controle de viagens e fretes</p>
 
-    <div id="googleBtnWrap" class="google-btn-wrap"></div>
-    <button class="btn-google-fallback" id="googleFallbackBtn">
-      <span class="g-icon">G</span> Continuar com Google
-    </button>
+    <script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-    <div class="login-divider"><span>ou</span></div>
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_ikQgli6CxiW0f1s7U6l25t5FqWgaoCo",
+    authDomain: "guilherme-75ce7.firebaseapp.com",
+    projectId: "guilherme-75ce7",
+    storageBucket: "guilherme-75ce7.firebasestorage.app",
+    messagingSenderId: "557368254834",
+    appId: "1:557368254834:web:d9bc006f70d9434d51bdeb"
+  };
 
-    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">Entrar sem login</button>
-    <p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
-  </div>
-</div>
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+</script>
 
 <div id="app">
 
