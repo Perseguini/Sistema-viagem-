@@ -14,7 +14,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Perseguini">
 <link rel="stylesheet" href="style.css">
-<script src="https://accounts.google.com/gsi/client" async defer id="gsiScript"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
 </head>
 <body>
 <div id="loginOverlay" class="login-overlay">
@@ -23,8 +24,7 @@
     <h1>Sistema Perseguini</h1>
     <p>Controle de viagens e fretes</p>
 
-    <div id="googleBtnWrap" class="google-btn-wrap"></div>
-    <button class="btn-google-fallback" id="googleFallbackBtn">
+    <button class="btn-google-fallback" id="googleLoginBtn">
       <span class="g-icon">G</span> Continuar com Google
     </button>
 
@@ -66,6 +66,7 @@
       <p class="greeting">
         <span id="greetingText">Olá, Motorista! 👋</span>
         <button class="edit-name" id="editNameBtn">editar</button>
+        <button class="logout-name-btn" id="logoutMainBtn" title="Sair da conta">🚪 Sair</button>
       </p>
       <p class="sub">Bem-vindo ao seu sistema de controle de viagens e fretes.</p>
     </div>
@@ -73,7 +74,6 @@
     <div class="user-chip" id="userChip" style="display:none;">
       <img id="userChipPic" class="user-chip-pic" alt="">
       <span id="userChipEmail" class="user-chip-email"></span>
-      <button class="user-chip-logout" id="logoutBtn">Sair</button>
     </div>
 
     <div class="stat-row single">

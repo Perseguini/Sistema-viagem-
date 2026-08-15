@@ -11,12 +11,16 @@
   const SKIP_LOGIN_KEY = "perseguini_skip_login_v1";
 
   /*
-   * To enable real Google login, create a free OAuth Client ID at
-   * https://console.cloud.google.com/apis/credentials (see setup notes
-   * shared alongside this file) and paste it below. Until then, the
-   * screen falls back to "Entrar sem login" automatically.
+   * Firebase project config (from Firebase Console → Project settings → General → Your apps).
    */
-  const GOOGLE_CLIENT_ID = "SEU_CLIENT_ID_AQUI.apps.googleusercontent.com";
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_ikQgli6CxiW0f1s7U6l25t5FqWgaoCo",
+    authDomain: "guilherme-75ce7.firebaseapp.com",
+    projectId: "guilherme-75ce7",
+    storageBucket: "guilherme-75ce7.firebasestorage.app",
+    messagingSenderId: "557368254834",
+    appId: "1:557368254834:web:d9bc006f70d9434d51bdeb"
+  };
 
   function loadTrips() {
     try {
@@ -53,6 +57,70 @@
   function fmtMoney(n) {
     n = Number(n) || 0;
     return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ---------------- Money / percent input masks ---------------- */
+  // Formats digits typed by the user as "1.234,56" (pt-BR), treating the
+  // last two digits as centavos. Caps at a sane max to avoid runaway values.
+  const MAX_MONEY_DIGITS = 12; // up to 9.999.999.999,99
+
+  function maskMoneyDigits(digits) {
+    digits = digits.replace(/\D/g, "").slice(0, MAX_MONEY_DIGITS);
+    digits = digits.replace(/^0+(?=\d)/, "");
+    if (!digits) return "";
+    while (digits.length < 3) digits = "0" + digits;
+    const cents = digits.slice(-2);
+    let intPart = digits.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
+    intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return intPart + "," + cents;
+  }
+
+  function attachMoneyMask(input, onChange) {
+    input.setAttribute("inputmode", "decimal");
+    input.setAttribute("autocomplete", "off");
+    input.addEventListener("input", () => {
+      const digitsOnly = input.value.replace(/\D/g, "");
+      input.value = maskMoneyDigits(digitsOnly);
+      if (onChange) onChange();
+    });
+    input.addEventListener("blur", () => {
+      if (input.value && toNumber(input.value) === 0) input.value = "";
+    });
+    // Prevent pasting non-numeric junk from corrupting the mask
+    input.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text");
+      const digitsOnly = (input.value + text).replace(/\D/g, "");
+      input.value = maskMoneyDigits(digitsOnly);
+      if (onChange) onChange();
+    });
+  }
+
+  // Percent field: digits + at most one comma, integer part clamped 0-100,
+  // at most 2 decimal digits. Typed naturally (e.g. "15" -> 15, "15,5" -> 15,5).
+  function sanitizePercent(raw) {
+    let v = raw.replace(/[^\d,]/g, "");
+    const firstComma = v.indexOf(",");
+    if (firstComma !== -1) {
+      v = v.slice(0, firstComma + 1) + v.slice(firstComma + 1).replace(/,/g, "");
+    }
+    let [intPart, decPart] = v.split(",");
+    intPart = (intPart || "").replace(/^0+(?=\d)/, "");
+    if (intPart === "") intPart = v.startsWith(",") ? "0" : "";
+    if (intPart !== "" && parseInt(intPart, 10) > 100) intPart = "100";
+    if (intPart === "100") decPart = undefined;
+    let result = intPart;
+    if (decPart !== undefined) result += "," + decPart.slice(0, 2);
+    return result;
+  }
+
+  function attachPercentMask(input, onChange) {
+    input.setAttribute("inputmode", "decimal");
+    input.setAttribute("autocomplete", "off");
+    input.addEventListener("input", () => {
+      input.value = sanitizePercent(input.value);
+      if (onChange) onChange();
+    });
   }
 
   function fmtDate(iso) {
@@ -250,6 +318,8 @@
   function clearUser() { localStorage.removeItem(USER_KEY); }
 
   function parseJwt(token) {
+    // Kept for backward compatibility with any previously stored data; not
+    // used by the current Firebase-based login flow.
     try {
       const base64Url = token.split(".")[1];
       const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
@@ -284,55 +354,87 @@
     }
   }
 
-  function setupGoogleButton() {
-    if (!window.google || !window.google.accounts || GOOGLE_CLIENT_ID.indexOf("SEU_CLIENT_ID") === 0) return;
+  /* ---------------- Firebase Auth (Google) ---------------- */
+  const googleLoginBtn = document.getElementById("googleLoginBtn");
+  let firebaseAuth = null;
+
+  function initFirebase() {
+    if (!window.firebase || firebaseAuth) return firebaseAuth;
     try {
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-      });
-      google.accounts.id.renderButton(document.getElementById("googleBtnWrap"), {
-        theme: "outline", size: "large", width: 288, text: "continue_with", shape: "pill",
-      });
-    } catch (e) { /* library not ready or blocked */ }
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      firebaseAuth = firebase.auth();
+    } catch (e) {
+      console.error("Falha ao iniciar Firebase:", e);
+    }
+    return firebaseAuth;
   }
 
-  function handleGoogleCredential(response) {
-    const payload = parseJwt(response.credential);
-    if (!payload) return;
-    setUser({
-      name: payload.name || "Motorista",
-      email: payload.email || "",
-      picture: payload.picture || "",
-      provider: "google",
-    });
-    setName(payload.name || "Motorista");
-    localStorage.removeItem(SKIP_LOGIN_KEY);
-    hideLogin();
-    applyUserToUI();
-    renderInicio();
-    toast(`Bem-vindo, ${payload.given_name || payload.name}!`);
+  function setGoogleBtnLoading(loading) {
+    if (!googleLoginBtn) return;
+    googleLoginBtn.disabled = loading;
+    googleLoginBtn.querySelector(".g-icon").textContent = loading ? "…" : "G";
   }
 
-  document.getElementById("googleFallbackBtn").addEventListener("click", () => {
-    toast("Login com Google ainda não configurado neste app.");
-  });
+  async function signInWithGoogle() {
+    const auth = initFirebase();
+    if (!auth) {
+      toast("Não foi possível iniciar o login com Google. Verifique sua conexão.");
+      return;
+    }
+    const provider = new firebase.auth.GoogleAuthProvider();
+    setGoogleBtnLoading(true);
+    try {
+      const result = await auth.signInWithPopup(provider);
+      const fbUser = result.user;
+      setUser({
+        uid: fbUser.uid,
+        name: fbUser.displayName || "Motorista",
+        email: fbUser.email || "",
+        picture: fbUser.photoURL || "",
+        provider: "google",
+      });
+      setName(fbUser.displayName || "Motorista");
+      localStorage.removeItem(SKIP_LOGIN_KEY);
+      hideLogin();
+      applyUserToUI();
+      renderInicio();
+      toast(`Bem-vindo, ${(fbUser.displayName || "").split(" ")[0] || "de volta"}!`);
+    } catch (e) {
+      if (e && e.code === "auth/popup-closed-by-user") {
+        // user cancelled, no need to show an error
+      } else if (e && e.code === "auth/unauthorized-domain") {
+        toast("Este domínio não está autorizado no Firebase (Authentication → Settings → Authorized domains).");
+      } else {
+        console.error("Erro no login com Google:", e);
+        toast("Não foi possível entrar com Google. Tente novamente.");
+      }
+    } finally {
+      setGoogleBtnLoading(false);
+    }
+  }
+
+  if (googleLoginBtn) googleLoginBtn.addEventListener("click", signInWithGoogle);
 
   document.getElementById("guestLoginBtn").addEventListener("click", () => {
     localStorage.setItem(SKIP_LOGIN_KEY, "1");
     hideLogin();
   });
 
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    if (!confirm("Sair da conta conectada?")) return;
-    clearUser();
-    localStorage.removeItem(SKIP_LOGIN_KEY);
-    applyUserToUI();
-    showLogin();
-    setupGoogleButton();
+  document.getElementById("logoutMainBtn").addEventListener("click", () => {
+    if (!confirm("Sair e voltar para a tela de login?")) return;
+    const auth = initFirebase();
+    const finishLogout = () => {
+      clearUser();
+      localStorage.removeItem(SKIP_LOGIN_KEY);
+      applyUserToUI();
+      showLogin();
+    };
+    if (auth) auth.signOut().then(finishLogout).catch(finishLogout);
+    else finishLogout();
   });
 
   function initLogin() {
+    initFirebase();
     const user = getUser();
     const skipped = localStorage.getItem(SKIP_LOGIN_KEY);
     applyUserToUI();
@@ -341,11 +443,7 @@
       return;
     }
     showLogin();
-    setupGoogleButton();
   }
-
-  const gsiScript = document.getElementById("gsiScript");
-  if (gsiScript) gsiScript.addEventListener("load", setupGoogleButton);
 
   /* ---------------- Theme toggle ---------------- */
   function getTheme() { return localStorage.getItem(THEME_KEY) || "light"; }
@@ -404,10 +502,16 @@
         <button class="remove-expense" data-id="${exp.id}" type="button" aria-label="Remover">✕</button>`;
       wrap.appendChild(row);
     });
-    wrap.querySelectorAll("input").forEach((inp) => {
+    wrap.querySelectorAll('input[data-field="desc"]').forEach((inp) => {
       inp.addEventListener("input", (e) => {
         const exp = currentExpenses.find((x) => x.id === e.target.dataset.id);
-        if (exp) exp[e.target.dataset.field] = e.target.value;
+        if (exp) exp.desc = e.target.value;
+      });
+    });
+    wrap.querySelectorAll('input[data-field="valor"]').forEach((inp) => {
+      attachMoneyMask(inp, () => {
+        const exp = currentExpenses.find((x) => x.id === inp.dataset.id);
+        if (exp) exp.valor = inp.value;
         updateSummary();
       });
     });
@@ -462,9 +566,10 @@
     document.getElementById("sumComissao").textContent = fmtMoney(c.comissaoValor);
   }
 
-  ["fFrete","fDiesel","fPedagio","fBorracharia","fCaixinha","fOutros","fComissao"].forEach((id) =>
-    els[id].addEventListener("input", updateSummary)
+  ["fFrete","fDiesel","fPedagio","fBorracharia","fCaixinha","fOutros"].forEach((id) =>
+    attachMoneyMask(els[id], updateSummary)
   );
+  attachPercentMask(els.fComissao, updateSummary);
 
   document.getElementById("btnLimpar").addEventListener("click", () => {
     if (confirm("Limpar todos os campos?")) resetForm();
