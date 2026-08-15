@@ -14,24 +14,144 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Perseguini">
 <link rel="stylesheet" href="style.css">
-<script src="https://accounts.google.com/gsi/client" async defer id="gsiScript"></script>
+  
 </head>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyA_ikQgli6CxiW0f1s7U6l25t5FqWgaoCo",
+  authDomain: "guilherme-75ce7.firebaseapp.com",
+  projectId: "guilherme-75ce7",
+  storageBucket: "guilherme-75ce7.firebasestorage.app",
+  messagingSenderId: "557368254834",
+  appId: "1:557368254834:web:d9bc006f70d9434d51bdeb"
+};
+
+// Inicializa Firebase
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+
+// Provedor Google
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+
+// ==========================================
+// LOGIN COM GOOGLE
+// ==========================================
+
+const googleButton = document.getElementById("googleFallbackBtn");
+
+googleButton.addEventListener("click", async function () {
+
+  try {
+
+    googleButton.disabled = true;
+    googleButton.innerHTML = "Entrando...";
+
+    const resultado = await auth.signInWithPopup(googleProvider);
+
+    const usuario = resultado.user;
+
+    console.log("Login realizado:", usuario);
+
+    // Salva informações básicas
+    localStorage.setItem("usuarioGoogle", JSON.stringify({
+      uid: usuario.uid,
+      nome: usuario.displayName,
+      email: usuario.email,
+      foto: usuario.photoURL
+    }));
+
+    // Fecha a tela de login
+    document.getElementById("loginOverlay").style.display = "none";
+
+  } catch (erro) {
+
+    console.error("Erro no login:", erro);
+
+    alert("Não foi possível entrar com o Google.\n\n" + erro.message);
+
+    googleButton.disabled = false;
+
+    googleButton.innerHTML =
+      '<span class="g-icon">G</span> Continuar com Google';
+  }
+
+});
+
+
+// ==========================================
+// ENTRAR SEM LOGIN
+// ==========================================
+
+const guestButton = document.getElementById("guestLoginBtn");
+
+guestButton.addEventListener("click", function () {
+
+  localStorage.setItem("modoConvidado", "true");
+
+  document.getElementById("loginOverlay").style.display = "none";
+
+});
+
+
+// ==========================================
+// VERIFICA SE JÁ ESTÁ LOGADO
+// ==========================================
+
+auth.onAuthStateChanged(function(usuario) {
+
+  if (usuario) {
+
+    console.log("Usuário conectado:", usuario.displayName);
+
+    localStorage.setItem("usuarioGoogle", JSON.stringify({
+      uid: usuario.uid,
+      nome: usuario.displayName,
+      email: usuario.email,
+      foto: usuario.photoURL
+    }));
+
+    document.getElementById("loginOverlay").style.display = "none";
+
+  }
+
+});
+</script>
+  
 <body>
 <div id="loginOverlay" class="login-overlay">
   <div class="login-card">
+
     <div class="login-badge">🚛</div>
+
     <h1>Sistema Perseguini</h1>
     <p>Controle de viagens e fretes</p>
 
     <div id="googleBtnWrap" class="google-btn-wrap"></div>
+
     <button class="btn-google-fallback" id="googleFallbackBtn">
-      <span class="g-icon">G</span> Continuar com Google
+      <span class="g-icon">G</span>
+      Continuar com Google
     </button>
 
-    <div class="login-divider"><span>ou</span></div>
+    <div class="login-divider">
+      <span>ou</span>
+    </div>
 
-    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">Entrar sem login</button>
-    <p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
+    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">
+      Entrar sem login
+    </button>
+
+    <p class="login-note">
+      Seus dados ficam salvos só neste aparelho, com ou sem login.
+    </p>
+
   </div>
 </div>
 
