@@ -404,7 +404,7 @@ button, input, select {
 .install-card .txt .t1 { font-size: 13.5px; font-weight: 800; }
 .install-card .txt .t2 { font-size: 11.5px; opacity: 0.85; margin-top: 2px; }
 .install-card button {
-  background: #0a0909;
+  background: #fff;
   color: var(--purple-dark);
   border: none;
   border-radius: 10px;
