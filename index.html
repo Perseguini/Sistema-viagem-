@@ -125,37 +125,7 @@ auth.onAuthStateChanged(function(usuario) {
 </script>
   
 <body>
-<div id="loginOverlay" class="login-overlay">
-  <div class="login-card">
 
-    <div class="login-badge">🚛</div>
-
-    <h1>Sistema Perseguini</h1>
-    <p>Controle de viagens e fretes</p>
-
-    <div id="googleBtnWrap" class="google-btn-wrap"></div>
-
-    <button class="btn-google-fallback" id="googleFallbackBtn">
-      <span class="g-icon">G</span>
-      Continuar com Google
-    </button>
-
-    <div class="login-divider">
-      <span>ou</span>
-    </div>
-
-    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">
-      Entrar sem login
-    </button>
-
-    <p class="login-note">
-      Seus dados ficam salvos só neste aparelho, com ou sem login.
-    </p>
-
-  </div>
-</div>
-
-<div id="app">
 
 
   <!-- ===== TOPBAR ===== -->
@@ -449,5 +419,39 @@ auth.onAuthStateChanged(function(usuario) {
 <canvas id="renderCanvas" style="display:none;"></canvas>
 
 <script src="app.js"></script>
+
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+
+    <div class="login-badge">🚛</div>
+
+    <h1>Sistema Perseguini</h1>
+    <p>Controle de viagens e fretes</p>
+
+    <div id="googleBtnWrap" class="google-btn-wrap"></div>
+
+    <button class="btn-google-fallback" id="googleFallbackBtn">
+      <span class="g-icon">G</span>
+      Continuar com Google
+    </button>
+
+    <div class="login-divider">
+      <span>ou</span>
+    </div>
+
+    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">
+      Entrar sem login
+    </button>
+
+    <p class="login-note">
+      Seus dados ficam salvos só neste aparelho, com ou sem login.
+    </p>
+
+  </div>
+</div>
+
+<div id="app">
+
+  
 </body>
 </html>
