@@ -53,7 +53,7 @@ googleButton.addEventListener("click", async function () {
     googleButton.disabled = true;
     googleButton.innerHTML = "Entrando...";
 
-    const resultado = await auth.signInWithPopup(googleProvider);
+   await auth.signInWithRedirect(googleProvider);
 
     const usuario = resultado.user;
 
