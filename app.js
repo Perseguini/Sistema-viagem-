@@ -358,6 +358,17 @@
   const googleLoginBtn = document.getElementById("googleLoginBtn");
   let firebaseAuth = null;
 
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  }
+  function isStandalonePWA() {
+    return (window.navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  }
+  // Popups are unreliable inside an installed iOS PWA (WKWebView blocks/loses
+  // them), so use a full-page redirect flow there instead.
+  const useRedirectFlow = isIOS() && isStandalonePWA();
+
   function initFirebase() {
     if (!window.firebase || firebaseAuth) return firebaseAuth;
     try {
@@ -375,6 +386,33 @@
     googleLoginBtn.querySelector(".g-icon").textContent = loading ? "…" : "G";
   }
 
+  function onGoogleSignInSuccess(fbUser) {
+    setUser({
+      uid: fbUser.uid,
+      name: fbUser.displayName || "Motorista",
+      email: fbUser.email || "",
+      picture: fbUser.photoURL || "",
+      provider: "google",
+    });
+    setName(fbUser.displayName || "Motorista");
+    localStorage.removeItem(SKIP_LOGIN_KEY);
+    hideLogin();
+    applyUserToUI();
+    renderInicio();
+    toast(`Bem-vindo, ${(fbUser.displayName || "").split(" ")[0] || "de volta"}!`);
+  }
+
+  function onGoogleSignInError(e) {
+    if (e && e.code === "auth/popup-closed-by-user") {
+      // user cancelled, no need to show an error
+    } else if (e && e.code === "auth/unauthorized-domain") {
+      toast("Este domínio não está autorizado no Firebase (Authentication → Settings → Authorized domains).");
+    } else {
+      console.error("Erro no login com Google:", e);
+      toast("Não foi possível entrar com Google. Tente novamente.");
+    }
+  }
+
   async function signInWithGoogle() {
     const auth = initFirebase();
     if (!auth) {
@@ -384,33 +422,30 @@
     const provider = new firebase.auth.GoogleAuthProvider();
     setGoogleBtnLoading(true);
     try {
-      const result = await auth.signInWithPopup(provider);
-      const fbUser = result.user;
-      setUser({
-        uid: fbUser.uid,
-        name: fbUser.displayName || "Motorista",
-        email: fbUser.email || "",
-        picture: fbUser.photoURL || "",
-        provider: "google",
-      });
-      setName(fbUser.displayName || "Motorista");
-      localStorage.removeItem(SKIP_LOGIN_KEY);
-      hideLogin();
-      applyUserToUI();
-      renderInicio();
-      toast(`Bem-vindo, ${(fbUser.displayName || "").split(" ")[0] || "de volta"}!`);
-    } catch (e) {
-      if (e && e.code === "auth/popup-closed-by-user") {
-        // user cancelled, no need to show an error
-      } else if (e && e.code === "auth/unauthorized-domain") {
-        toast("Este domínio não está autorizado no Firebase (Authentication → Settings → Authorized domains).");
-      } else {
-        console.error("Erro no login com Google:", e);
-        toast("Não foi possível entrar com Google. Tente novamente.");
+      if (useRedirectFlow) {
+        // Page will navigate away and come back; result is picked up by
+        // getRedirectResult() below on next load.
+        await auth.signInWithRedirect(provider);
+        return;
       }
+      const result = await auth.signInWithPopup(provider);
+      onGoogleSignInSuccess(result.user);
+    } catch (e) {
+      onGoogleSignInError(e);
     } finally {
       setGoogleBtnLoading(false);
     }
+  }
+
+  // Handle the return trip from signInWithRedirect (iOS standalone PWA flow).
+  function checkRedirectResult() {
+    const auth = initFirebase();
+    if (!auth) return;
+    auth.getRedirectResult()
+      .then((result) => {
+        if (result && result.user) onGoogleSignInSuccess(result.user);
+      })
+      .catch(onGoogleSignInError);
   }
 
   if (googleLoginBtn) googleLoginBtn.addEventListener("click", signInWithGoogle);
@@ -435,6 +470,7 @@
 
   function initLogin() {
     initFirebase();
+    checkRedirectResult();
     const user = getUser();
     const skipped = localStorage.getItem(SKIP_LOGIN_KEY);
     applyUserToUI();
@@ -478,6 +514,19 @@
   window.addEventListener("appinstalled", () => {
     document.getElementById("installCard").style.display = "none";
   });
+
+  // iOS Safari never fires beforeinstallprompt, so show manual instructions
+  // instead whenever the app isn't already installed to the home screen.
+  if (isIOS() && !isStandalonePWA()) {
+    const card = document.getElementById("installCard");
+    card.querySelector(".t2").textContent = "Toque em Compartilhar 􀈂 e depois em \"Adicionar à Tela de Início\"";
+    const btn = document.getElementById("installBtn");
+    btn.textContent = "Como instalar";
+    btn.addEventListener("click", () => {
+      toast("Toque no ícone de Compartilhar do Safari e escolha 'Adicionar à Tela de Início'.");
+    });
+    card.style.display = "flex";
+  }
 
   /* ---------------- Nova viagem screen ---------------- */
   const formIds = ["fDestino", "fCliente", "fProduto", "fData", "fFrete", "fDiesel", "fPedagio", "fBorracharia", "fCaixinha", "fOutros", "fComissao"];
