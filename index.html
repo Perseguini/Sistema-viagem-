@@ -17,15 +17,30 @@
 <script src="https://accounts.google.com/gsi/client" async defer id="gsiScript"></script>
 </head>
 <body>
-<div id="loginOverlay" class="login-overlay">
-  <div class="login-card">
-    <div class="login-badge">🚛</div>
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_ikQgli6CxiW0f1s7U6l25t5FqWgaoCo",
+    authDomain: "guilherme-75ce7.firebaseapp.com",
+    projectId: "guilherme-75ce7",
+    storageBucket: "guilherme-75ce7.firebasestorage.app",
+    messagingSenderId: "557368254834",
+    appId: "1:557368254834:web:d9bc006f70d9434d51bdeb"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+</script>
+
+
     <h1>Sistema Perseguini</h1>
     <p>Controle de viagens e fretes</p>
-
-
-<div id="app">
-
 
   <!-- ===== TOPBAR ===== -->
   <div class="topbar" id="topbar">
