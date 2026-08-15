@@ -1,11 +1,22 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "14/08/2026 01:10";
+  const APP_VERSION = "14/08/2026 02:30";
 
   /* ---------------- Storage helpers ---------------- */
   const STORE_KEY = "perseguini_trips_v1";
   const NAME_KEY = "perseguini_name_v1";
+  const THEME_KEY = "perseguini_theme_v1";
+  const USER_KEY = "perseguini_user_v1";
+  const SKIP_LOGIN_KEY = "perseguini_skip_login_v1";
+
+  /*
+   * To enable real Google login, create a free OAuth Client ID at
+   * https://console.cloud.google.com/apis/credentials (see setup notes
+   * shared alongside this file) and paste it below. Until then, the
+   * screen falls back to "Entrar sem login" automatically.
+   */
+  const GOOGLE_CLIENT_ID = "SEU_CLIENT_ID_AQUI.apps.googleusercontent.com";
 
   function loadTrips() {
     try {
@@ -81,12 +92,18 @@
     const caixinha = toNumber(t.caixinha);
     const outros = toNumber(t.outros);
     const comissaoPct = toNumber(t.comissaoPct);
+    const despesasExtras = Array.isArray(t.despesasExtras) ? t.despesasExtras : [];
+    const despesasExtrasTotal = despesasExtras.reduce((acc, d) => acc + toNumber(d.valor), 0);
 
     const comissaoValor = frete * (comissaoPct / 100);
-    const totalGastos = diesel + pedagio + borracharia + caixinha + outros + comissaoValor;
+    const totalGastos = diesel + pedagio + borracharia + caixinha + outros + despesasExtrasTotal + comissaoValor;
     const liquido = frete - totalGastos;
 
-    return { frete, diesel, pedagio, borracharia, caixinha, outros, comissaoPct, comissaoValor, totalGastos, liquido };
+    return {
+      frete, diesel, pedagio, borracharia, caixinha, outros, comissaoPct, comissaoValor,
+      despesasExtras, despesasExtrasTotal, totalGastos, liquido,
+      cliente: t.cliente || "", produto: t.produto || "",
+    };
   }
 
   /* ---------------- Tab navigation ---------------- */
@@ -94,6 +111,7 @@
     inicio: document.getElementById("screen-inicio"),
     nova: document.getElementById("screen-nova"),
     historico: document.getElementById("screen-historico"),
+    stats: document.getElementById("screen-stats"),
   };
   const navBtns = document.querySelectorAll(".nav-btn");
   const topbarSubtitle = document.getElementById("topbarSubtitle");
@@ -102,6 +120,7 @@
     inicio: "Controle de viagens e fretes",
     nova: "Preencha os dados da viagem",
     historico: "Suas viagens por período",
+    stats: "Relatórios e desempenho",
   };
 
   function goTo(tab) {
@@ -110,17 +129,21 @@
 
     const brandRow = document.getElementById("topbarBrand");
     const titleRow = document.getElementById("topbarTitleRow");
+    const filterBtn = document.getElementById("filterBtn");
     if (tab === "historico") {
       brandRow.style.display = "none";
       titleRow.style.display = "flex";
+      filterBtn.style.display = "flex";
     } else {
       brandRow.style.display = "flex";
       titleRow.style.display = "none";
+      filterBtn.style.display = "none";
       topbarSubtitle.textContent = subtitles[tab] || subtitles.inicio;
     }
 
     if (tab === "historico") renderHistorico();
     if (tab === "inicio") renderInicio();
+    if (tab === "stats") renderStats();
     window.scrollTo(0, 0);
   }
 
@@ -187,14 +210,155 @@
     })[m]);
   }
 
-  document.getElementById("editNameBtn").addEventListener("click", () => {
+  document.getElementById("editNameBtn").addEventListener("click", openNameModal);
+
+  /* ---------------- Custom name-edit modal ---------------- */
+  const nameModal = document.getElementById("nameModal");
+  const nameModalInput = document.getElementById("nameModalInput");
+
+  function openNameModal() {
     const current = getName();
-    const val = prompt("Como podemos te chamar?", current === "Motorista" ? "" : current);
-    if (val && val.trim()) {
-      setName(val.trim());
+    nameModalInput.value = current === "Motorista" ? "" : current;
+    nameModal.classList.add("open");
+    setTimeout(() => nameModalInput.focus(), 150);
+  }
+  function closeNameModal() {
+    nameModal.classList.remove("open");
+  }
+  document.getElementById("closeNameModalBtn").addEventListener("click", closeNameModal);
+  document.getElementById("cancelNameBtn").addEventListener("click", closeNameModal);
+  nameModal.addEventListener("click", (e) => {
+    if (e.target === nameModal) closeNameModal();
+  });
+  document.getElementById("saveNameBtn").addEventListener("click", () => {
+    const val = nameModalInput.value.trim();
+    if (val) {
+      setName(val);
       renderInicio();
     }
+    closeNameModal();
   });
+  nameModalInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("saveNameBtn").click();
+  });
+
+  /* ---------------- Login / user account ---------------- */
+  function getUser() {
+    try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch (e) { return null; }
+  }
+  function setUser(u) { localStorage.setItem(USER_KEY, JSON.stringify(u)); }
+  function clearUser() { localStorage.removeItem(USER_KEY); }
+
+  function parseJwt(token) {
+    try {
+      const base64Url = token.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        atob(base64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const loginOverlay = document.getElementById("loginOverlay");
+  function showLogin() { loginOverlay.classList.add("open"); }
+  function hideLogin() { loginOverlay.classList.remove("open"); }
+
+  function applyUserToUI() {
+    const user = getUser();
+    const chip = document.getElementById("userChip");
+    if (user) {
+      chip.style.display = "flex";
+      document.getElementById("userChipEmail").textContent = user.email || "";
+      const pic = document.getElementById("userChipPic");
+      if (user.picture) {
+        pic.src = user.picture;
+        pic.style.display = "block";
+      } else {
+        pic.style.display = "none";
+      }
+    } else {
+      chip.style.display = "none";
+    }
+  }
+
+  function setupGoogleButton() {
+    if (!window.google || !window.google.accounts || GOOGLE_CLIENT_ID.indexOf("SEU_CLIENT_ID") === 0) return;
+    try {
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+      });
+      google.accounts.id.renderButton(document.getElementById("googleBtnWrap"), {
+        theme: "outline", size: "large", width: 288, text: "continue_with", shape: "pill",
+      });
+    } catch (e) { /* library not ready or blocked */ }
+  }
+
+  function handleGoogleCredential(response) {
+    const payload = parseJwt(response.credential);
+    if (!payload) return;
+    setUser({
+      name: payload.name || "Motorista",
+      email: payload.email || "",
+      picture: payload.picture || "",
+      provider: "google",
+    });
+    setName(payload.name || "Motorista");
+    localStorage.removeItem(SKIP_LOGIN_KEY);
+    hideLogin();
+    applyUserToUI();
+    renderInicio();
+    toast(`Bem-vindo, ${payload.given_name || payload.name}!`);
+  }
+
+  document.getElementById("googleFallbackBtn").addEventListener("click", () => {
+    toast("Login com Google ainda não configurado neste app.");
+  });
+
+  document.getElementById("guestLoginBtn").addEventListener("click", () => {
+    localStorage.setItem(SKIP_LOGIN_KEY, "1");
+    hideLogin();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    if (!confirm("Sair da conta conectada?")) return;
+    clearUser();
+    localStorage.removeItem(SKIP_LOGIN_KEY);
+    applyUserToUI();
+    showLogin();
+    setupGoogleButton();
+  });
+
+  function initLogin() {
+    const user = getUser();
+    const skipped = localStorage.getItem(SKIP_LOGIN_KEY);
+    applyUserToUI();
+    if (user || skipped) {
+      hideLogin();
+      return;
+    }
+    showLogin();
+    setupGoogleButton();
+  }
+
+  const gsiScript = document.getElementById("gsiScript");
+  if (gsiScript) gsiScript.addEventListener("load", setupGoogleButton);
+
+  /* ---------------- Theme toggle ---------------- */
+  function getTheme() { return localStorage.getItem(THEME_KEY) || "light"; }
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+    document.getElementById("themeToggleBtn").textContent = theme === "dark" ? "☀️" : "🌙";
+  }
+  document.getElementById("themeToggleBtn").addEventListener("click", () => {
+    const next = getTheme() === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+  applyTheme(getTheme());
 
   /* ---------------- Install (Add to Home Screen) ---------------- */
   let deferredPrompt = null;
@@ -218,9 +382,48 @@
   });
 
   /* ---------------- Nova viagem screen ---------------- */
-  const formIds = ["fDestino", "fData", "fFrete", "fDiesel", "fPedagio", "fBorracharia", "fCaixinha", "fOutros", "fComissao"];
+  const formIds = ["fDestino", "fCliente", "fProduto", "fData", "fFrete", "fDiesel", "fPedagio", "fBorracharia", "fCaixinha", "fOutros", "fComissao"];
   const els = {};
   formIds.forEach((id) => (els[id] = document.getElementById(id)));
+
+  let currentExpenses = [];
+
+  function renderExpenseList() {
+    const wrap = document.getElementById("expenseListWrap");
+    if (!currentExpenses.length) {
+      wrap.innerHTML = `<p class="expense-empty">Nenhuma despesa extra lançada ainda.</p>`;
+      return;
+    }
+    wrap.innerHTML = "";
+    currentExpenses.forEach((exp) => {
+      const row = document.createElement("div");
+      row.className = "expense-row";
+      row.innerHTML = `
+        <input type="text" placeholder="Descrição (ex: estacionamento)" value="${escapeHtml(exp.desc || "")}" data-id="${exp.id}" data-field="desc">
+        <div class="money-wrap"><span>R$</span><input inputmode="decimal" placeholder="0,00" value="${escapeHtml(exp.valor || "")}" data-id="${exp.id}" data-field="valor"></div>
+        <button class="remove-expense" data-id="${exp.id}" type="button" aria-label="Remover">✕</button>`;
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll("input").forEach((inp) => {
+      inp.addEventListener("input", (e) => {
+        const exp = currentExpenses.find((x) => x.id === e.target.dataset.id);
+        if (exp) exp[e.target.dataset.field] = e.target.value;
+        updateSummary();
+      });
+    });
+    wrap.querySelectorAll(".remove-expense").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentExpenses = currentExpenses.filter((x) => x.id !== btn.dataset.id);
+        renderExpenseList();
+        updateSummary();
+      });
+    });
+  }
+
+  document.getElementById("btnAddExpense").addEventListener("click", () => {
+    currentExpenses.push({ id: uid(), desc: "", valor: "" });
+    renderExpenseList();
+  });
 
   function nowLocalInputValue() {
     const d = new Date();
@@ -230,8 +433,12 @@
 
   function resetForm() {
     els.fDestino.value = "";
+    els.fCliente.value = "";
+    els.fProduto.value = "";
     els.fData.value = nowLocalInputValue();
     ["fFrete","fDiesel","fPedagio","fBorracharia","fCaixinha","fOutros","fComissao"].forEach((id) => (els[id].value = ""));
+    currentExpenses = [];
+    renderExpenseList();
     updateSummary();
   }
 
@@ -244,6 +451,7 @@
       caixinha: els.fCaixinha.value,
       outros: els.fOutros.value,
       comissaoPct: els.fComissao.value,
+      despesasExtras: currentExpenses,
     };
     const c = computeTrip(t);
     document.getElementById("sumGastos").textContent = fmtMoney(c.totalGastos - c.comissaoValor);
@@ -276,6 +484,8 @@
     const t = {
       id: uid(),
       destino: els.fDestino.value.trim(),
+      cliente: els.fCliente.value.trim(),
+      produto: els.fProduto.value.trim(),
       data: els.fData.value ? new Date(els.fData.value).toISOString() : new Date().toISOString(),
       frete: toNumber(els.fFrete.value),
       diesel: toNumber(els.fDiesel.value),
@@ -284,6 +494,9 @@
       caixinha: toNumber(els.fCaixinha.value),
       outros: toNumber(els.fOutros.value),
       comissaoPct: toNumber(els.fComissao.value),
+      despesasExtras: currentExpenses
+        .filter((e) => e.desc.trim() || toNumber(e.valor))
+        .map((e) => ({ id: e.id, desc: e.desc.trim(), valor: toNumber(e.valor) })),
     };
     trips.push(t);
     saveTrips(trips);
@@ -373,7 +586,7 @@
               <div class="pin">📍</div>
               <div>
                 <div class="dest">${escapeHtml(t.destino || "Sem destino")}</div>
-                <div class="date">${fmtDate(t.data)}</div>
+                <div class="date">${fmtDate(t.data)}${t.cliente ? " • " + escapeHtml(t.cliente) : ""}</div>
               </div>
             </div>
             <button class="menu-btn" data-id="${t.id}" aria-label="Opções">⋮</button>
@@ -437,11 +650,21 @@
     const c = computeTrip(t);
 
     const body = document.getElementById("resumoBody");
+    const extraInfoRows = [
+      t.cliente ? `<div class="resumo-row" style="margin-top:8px;"><span class="rl">Cliente</span></div><div class="resumo-row" style="padding-top:0;"><span class="rv" style="font-size:15px;">${escapeHtml(t.cliente)}</span></div>` : "",
+      t.produto ? `<div class="resumo-row" style="margin-top:8px;"><span class="rl">Produto</span></div><div class="resumo-row" style="padding-top:0;"><span class="rv" style="font-size:15px;">${escapeHtml(t.produto)}</span></div>` : "",
+    ].join("");
+
+    const expenseRows = c.despesasExtras.length
+      ? c.despesasExtras.map((d) => `<div class="resumo-row"><span class="rl">${escapeHtml(d.desc || "Despesa extra")}</span><span class="rv">${fmtMoney(toNumber(d.valor))}</span></div>`).join("")
+      : "";
+
     body.innerHTML = `
       <div class="resumo-row"><span class="rl">Destino</span></div>
       <div class="resumo-row" style="padding-top:0;"><span class="rv" style="font-size:16px;">${escapeHtml(t.destino || "-")}</span></div>
       <div class="resumo-row" style="margin-top:8px;"><span class="rl">Data</span></div>
       <div class="resumo-row" style="padding-top:0;"><span class="rv">${fmtDateOnly(t.data)}</span></div>
+      ${extraInfoRows}
 
       <div class="resumo-row divider"><span class="rl">Frete</span><span class="rv">${fmtMoney(c.frete)}</span></div>
       <div class="resumo-row"><span class="rl">Diesel</span><span class="rv">${fmtMoney(c.diesel)}</span></div>
@@ -449,6 +672,7 @@
       <div class="resumo-row"><span class="rl">Borracharia</span><span class="rv">${fmtMoney(c.borracharia)}</span></div>
       <div class="resumo-row"><span class="rl">Caixinha</span><span class="rv">${fmtMoney(c.caixinha)}</span></div>
       <div class="resumo-row"><span class="rl">Outros</span><span class="rv">${fmtMoney(c.outros)}</span></div>
+      ${expenseRows}
       <div class="resumo-row"><span class="rl">Total de gastos</span><span class="rv">${fmtMoney(c.totalGastos)}</span></div>
       <div class="resumo-row divider"><span class="rl">Valor líquido</span><span class="rv">${fmtMoney(c.liquido)}</span></div>
 
@@ -527,6 +751,12 @@
       const c = computeTrip(t);
       const W = 900;
       const scale = 2; // retina export
+
+      const infoFields = [["Destino", t.destino || "-"]];
+      if (t.cliente) infoFields.push(["Cliente", t.cliente]);
+      if (t.produto) infoFields.push(["Produto", t.produto]);
+      infoFields.push(["Data", fmtDateOnly(t.data)]);
+
       const rows = [
         ["Frete", c.frete, false],
         ["Diesel", c.diesel, false],
@@ -534,21 +764,20 @@
         ["Borracharia", c.borracharia, false],
         ["Caixinha", c.caixinha, false],
         ["Outros", c.outros, false],
-        ["Total de gastos", c.totalGastos, true],
-        ["Valor líquido", c.liquido, true],
       ];
+      c.despesasExtras.forEach((d) => rows.push([d.desc || "Despesa extra", toNumber(d.valor), false]));
+      rows.push(["Total de gastos", c.totalGastos, true]);
+      rows.push(["Valor líquido", c.liquido, true]);
 
       const headerH = 160;
       const padX = 46;
-      let bodyH = 60; // top padding inside card before destino
-      bodyH += 40 + 12; // destino label + value
-      bodyH += 40 + 30; // data label + value + gap
+      let bodyH = 60; // top padding inside card before first info field
+      bodyH += infoFields.length * 74; // each info label+value block
       bodyH += rows.length * 46;
       bodyH += 26; // divider spacing
       bodyH += 76; // final total row
       bodyH += 30; // bottom padding
 
-      const cardTop = 70;
       const cardPad = 24;
       const H = headerH + bodyH + 40;
 
@@ -589,25 +818,16 @@
       const lx = cardX + cardPad;
       const rx = cardX + cardW - cardPad;
 
-      // Destino
-      ctx.fillStyle = "#8A8FA3";
-      ctx.font = "700 17px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-      ctx.fillText("Destino", lx, y);
-      y += 34;
-      ctx.fillStyle = "#1A1D29";
-      ctx.font = "800 26px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-      ctx.fillText(t.destino || "-", lx, y);
-      y += 44;
-
-      // Data
-      ctx.fillStyle = "#8A8FA3";
-      ctx.font = "700 17px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-      ctx.fillText("Data", lx, y);
-      y += 34;
-      ctx.fillStyle = "#1A1D29";
-      ctx.font = "800 26px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-      ctx.fillText(fmtDateOnly(t.data), lx, y);
-      y += 40;
+      infoFields.forEach(([label, value]) => {
+        ctx.fillStyle = "#8A8FA3";
+        ctx.font = "700 17px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        ctx.fillText(label, lx, y);
+        y += 34;
+        ctx.fillStyle = "#1A1D29";
+        ctx.font = "800 24px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        ctx.fillText(String(value), lx, y);
+        y += 40;
+      });
 
       // divider
       ctx.strokeStyle = "#ECEDF3";
@@ -661,6 +881,174 @@
     ctx.closePath();
   }
 
+  /* ---------------- Estatísticas screen ---------------- */
+  const statsYearSel = document.getElementById("statsYear");
+  const statsMonthSel = document.getElementById("statsMonth");
+  const statsModeSel = document.getElementById("statsMode");
+  const statsMonthRow = document.getElementById("statsMonthRow");
+
+  function buildStatsSelectsIfNeeded() {
+    if (!statsMonthSel.dataset.built) {
+      statsMonthSel.innerHTML = MONTH_NAMES.map((name, i) => `<option value="${i}">${name}</option>`).join("");
+      statsMonthSel.dataset.built = "1";
+      statsMonthSel.value = String(new Date().getMonth());
+    }
+  }
+
+  statsModeSel.addEventListener("change", () => {
+    statsMonthRow.style.display = statsModeSel.value === "year" ? "none" : "flex";
+    renderStats();
+  });
+  statsYearSel.addEventListener("change", renderStats);
+  statsMonthSel.addEventListener("change", renderStats);
+
+  function tripsForPeriod(year, month) {
+    return trips.filter((t) => {
+      const d = new Date(t.data);
+      return d.getFullYear() === year && (month === null || d.getMonth() === month);
+    });
+  }
+
+  function renderStats() {
+    const years = availableYears();
+    const prevYear = statsYearSel.value ? parseInt(statsYearSel.value, 10) : new Date().getFullYear();
+    statsYearSel.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join("");
+    statsYearSel.value = years.includes(prevYear) ? String(prevYear) : String(years[0]);
+    buildStatsSelectsIfNeeded();
+
+    const year = parseInt(statsYearSel.value, 10);
+    const isYearMode = statsModeSel.value === "year";
+    const month = isYearMode ? null : parseInt(statsMonthSel.value, 10);
+
+    const periodTrips = tripsForPeriod(year, month);
+    const totals = periodTrips.reduce(
+      (acc, t) => {
+        const c = computeTrip(t);
+        acc.frete += c.frete;
+        acc.despesas += c.totalGastos - c.comissaoValor;
+        acc.comissao += c.comissaoValor;
+        acc.liquido += c.liquido;
+        acc.diesel += c.diesel;
+        acc.pedagio += c.pedagio;
+        acc.borracharia += c.borracharia;
+        acc.caixinha += c.caixinha;
+        acc.outros += c.outros;
+        acc.despesasExtras += c.despesasExtrasTotal;
+        return acc;
+      },
+      { frete: 0, despesas: 0, comissao: 0, liquido: 0, diesel: 0, pedagio: 0, borracharia: 0, caixinha: 0, outros: 0, despesasExtras: 0 }
+    );
+
+    document.getElementById("statFaturamento").textContent = fmtMoney(totals.frete);
+    document.getElementById("statDespesas").textContent = fmtMoney(totals.despesas);
+    document.getElementById("statComissaoTotal").textContent = fmtMoney(totals.comissao);
+    document.getElementById("statLucro").textContent = fmtMoney(totals.liquido);
+    document.getElementById("statQtdViagens").textContent = periodTrips.length;
+    document.getElementById("statTicketMedio").textContent = fmtMoney(periodTrips.length ? totals.liquido / periodTrips.length : 0);
+
+    drawStatsChart(year, month);
+    renderBreakdown(totals);
+  }
+
+  function drawStatsChart(year, highlightMonth) {
+    const canvas = document.getElementById("statsChart");
+    const card = canvas.closest(".chart-card");
+    const cssWidth = card.clientWidth - 20;
+    const cssHeight = 220;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.width = cssWidth + "px";
+    canvas.style.height = cssHeight + "px";
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    const monthlyLiquido = Array.from({ length: 12 }, () => 0);
+    trips.forEach((t) => {
+      const d = new Date(t.data);
+      if (d.getFullYear() === year) monthlyLiquido[d.getMonth()] += computeTrip(t).liquido;
+    });
+
+    const maxAbs = Math.max(1, ...monthlyLiquido.map((v) => Math.abs(v)));
+    const chartTop = 10;
+    const chartBottom = cssHeight - 26;
+    const zeroY = chartBottom - (chartBottom - chartTop) * 0.15;
+    const barAreaH = chartBottom - chartTop;
+    const barW = (cssWidth / 12) * 0.55;
+    const gap = cssWidth / 12;
+
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const textColor = isDark ? "#ABB0CC" : "#8A8FA3";
+    const gridColor = isDark ? "#262B4A" : "#ECEDF3";
+
+    // baseline
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, zeroY);
+    ctx.lineTo(cssWidth, zeroY);
+    ctx.stroke();
+
+    monthlyLiquido.forEach((val, i) => {
+      const x = gap * i + gap / 2 - barW / 2;
+      const h = Math.max(2, (Math.abs(val) / maxAbs) * (barAreaH * 0.82));
+      const isHighlight = highlightMonth === i;
+      const positive = val >= 0;
+      ctx.fillStyle = positive
+        ? (isHighlight ? "#1FAB56" : (isDark ? "#1E5A3B" : "#BFEAD1"))
+        : (isHighlight ? "#E1543A" : (isDark ? "#5B2A22" : "#F6D2CA"));
+      const y = positive ? zeroY - h : zeroY;
+      roundRectChart(ctx, x, y, barW, h, 4);
+      ctx.fill();
+
+      ctx.fillStyle = textColor;
+      ctx.font = (isHighlight ? "800 " : "600 ") + "10px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(MONTH_NAMES[i].slice(0, 3), gap * i + gap / 2, cssHeight - 8);
+    });
+    ctx.textAlign = "left";
+  }
+
+  function roundRectChart(ctx, x, y, w, h, r) {
+    if (h < r * 2) r = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath();
+  }
+
+  function renderBreakdown(totals) {
+    const cats = [
+      ["Diesel", totals.diesel],
+      ["Pedágio", totals.pedagio],
+      ["Borracharia", totals.borracharia],
+      ["Caixinha", totals.caixinha],
+      ["Outros", totals.outros],
+      ["Despesas do trajeto", totals.despesasExtras],
+      ["Comissão", totals.comissao],
+    ];
+    const max = Math.max(1, ...cats.map((c) => c[1]));
+    const wrap = document.getElementById("breakdownWrap");
+    if (cats.every((c) => c[1] === 0)) {
+      wrap.innerHTML = `<div class="expense-empty">Sem dados neste período.</div>`;
+      return;
+    }
+    wrap.innerHTML = cats
+      .map(
+        ([label, val]) => `
+        <div class="bd-row">
+          <div class="bd-top"><span>${label}</span><span class="bd-val">${fmtMoney(val)}</span></div>
+          <div class="bd-bar-track"><div class="bd-bar-fill" style="width:${Math.max(2, (val / max) * 100)}%"></div></div>
+        </div>`
+      )
+      .join("");
+  }
+
   /* ---------------- Service worker ---------------- */
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -699,4 +1087,5 @@
   resetForm();
   renderInicio();
   renderHistorico();
+  initLogin();
 })();

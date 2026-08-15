@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<script>try{if(localStorage.getItem('perseguini_theme_v1')==='dark'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Sistema Perseguini</title>
 <meta name="theme-color" content="#0F1229">
@@ -13,24 +14,49 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Perseguini">
 <link rel="stylesheet" href="style.css">
+<script src="https://accounts.google.com/gsi/client" async defer id="gsiScript"></script>
 </head>
 <body>
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-badge">🚛</div>
+    <h1>Sistema Perseguini</h1>
+    <p>Controle de viagens e fretes</p>
+
+    <div id="googleBtnWrap" class="google-btn-wrap"></div>
+    <button class="btn-google-fallback" id="googleFallbackBtn">
+      <span class="g-icon">G</span> Continuar com Google
+    </button>
+
+    <div class="login-divider"><span>ou</span></div>
+
+    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">Entrar sem login</button>
+    <p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
+  </div>
+</div>
+
 <div id="app">
+
 
   <!-- ===== TOPBAR ===== -->
   <div class="topbar" id="topbar">
-    <div class="brand" id="topbarBrand">
-      <div class="brand-badge">🚛</div>
-      <div class="brand-text">
-        <span class="title">Sistema Perseguini</span>
-        <span class="subtitle" id="topbarSubtitle">Controle de viagens e fretes</span>
+    <div class="topbar-left">
+      <div class="brand" id="topbarBrand">
+        <div class="brand-badge">🚛</div>
+        <div class="brand-text">
+          <span class="title">Sistema Perseguini</span>
+          <span class="subtitle" id="topbarSubtitle">Controle de viagens e fretes</span>
+        </div>
+      </div>
+      <div class="topbar-title-row" id="topbarTitleRow" style="display:none;">
+        <h2 id="topbarTitleText">Histórico de viagens</h2>
       </div>
     </div>
-    <div class="topbar-title-row" id="topbarTitleRow" style="display:none;">
-      <h2 id="topbarTitleText">Histórico de viagens</h2>
-      <button class="filter-btn" id="filterBtn" aria-label="Filtro">
+    <div class="topbar-right">
+      <button class="filter-btn" id="filterBtn" aria-label="Filtro" style="display:none;">
         <span></span><span></span><span></span>
       </button>
+      <button class="theme-toggle" id="themeToggleBtn" aria-label="Alternar tema">🌙</button>
     </div>
   </div>
 
@@ -42,6 +68,12 @@
         <button class="edit-name" id="editNameBtn">editar</button>
       </p>
       <p class="sub">Bem-vindo ao seu sistema de controle de viagens e fretes.</p>
+    </div>
+
+    <div class="user-chip" id="userChip" style="display:none;">
+      <img id="userChipPic" class="user-chip-pic" alt="">
+      <span id="userChipEmail" class="user-chip-email"></span>
+      <button class="user-chip-logout" id="logoutBtn">Sair</button>
     </div>
 
     <div class="stat-row single">
@@ -83,6 +115,14 @@
           <input type="text" id="fDestino" placeholder="Ex: Curitiba - PR" autocomplete="off">
         </div>
         <div class="field">
+          <label for="fCliente">Cliente (empresa fretada)</label>
+          <input type="text" id="fCliente" placeholder="Ex: Transportes Silva Ltda" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="fProduto">Produto transportado</label>
+          <input type="text" id="fProduto" placeholder="Ex: Grãos, móveis, carga geral..." autocomplete="off">
+        </div>
+        <div class="field">
           <label for="fData">Data da viagem</label>
           <input type="datetime-local" id="fData">
         </div>
@@ -120,6 +160,15 @@
         </div>
       </div>
 
+      <div class="form-card">
+        <div class="fc-title-row">
+          <p class="fc-title" style="margin:0;">Despesas do trajeto</p>
+          <button class="add-expense-btn" id="btnAddExpense" type="button">+ Adicionar</button>
+        </div>
+        <p class="fc-hint">Lance gastos extras conforme eles acontecem durante a viagem.</p>
+        <div id="expenseListWrap"></div>
+      </div>
+
       <div class="summary-box">
         <p class="fc-title">Resumo da viagem</p>
         <div class="sum-row"><span>Total de gastos</span><span id="sumGastos">R$ 0,00</span></div>
@@ -151,6 +200,63 @@
     <div id="monthsWrap"></div>
   </section>
 
+  <!-- ===== SCREEN: ESTATÍSTICAS ===== -->
+  <section class="screen" id="screen-stats">
+    <div class="period-box">
+      <p class="fc-title" style="margin:0;">Período de análise</p>
+      <p class="period-desc">Acompanhe seu desempenho por mês ou pelo ano inteiro.</p>
+      <div class="selector-row">
+        <select id="statsYear"></select>
+        <select id="statsMode">
+          <option value="month">Por mês</option>
+          <option value="year">Ano inteiro</option>
+        </select>
+      </div>
+      <div class="selector-row" id="statsMonthRow" style="margin-top:10px;">
+        <select id="statsMonth"></select>
+      </div>
+    </div>
+
+    <div class="stats-cards">
+      <div class="stats-card">
+        <div class="sc-label">Faturamento (frete)</div>
+        <div class="sc-value" id="statFaturamento">R$ 0,00</div>
+      </div>
+      <div class="stats-card">
+        <div class="sc-label">Despesas totais</div>
+        <div class="sc-value expense" id="statDespesas">R$ 0,00</div>
+      </div>
+      <div class="stats-card">
+        <div class="sc-label">Comissão total</div>
+        <div class="sc-value commission" id="statComissaoTotal">R$ 0,00</div>
+      </div>
+      <div class="stats-card highlight">
+        <div class="sc-label">Lucro líquido</div>
+        <div class="sc-value profit" id="statLucro">R$ 0,00</div>
+      </div>
+      <div class="stats-card">
+        <div class="sc-label">Viagens no período</div>
+        <div class="sc-value" id="statQtdViagens">0</div>
+      </div>
+      <div class="stats-card">
+        <div class="sc-label">Ticket médio</div>
+        <div class="sc-value" id="statTicketMedio">R$ 0,00</div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h3>Líquido por mês</h3>
+    </div>
+    <div class="chart-card">
+      <canvas id="statsChart" width="700" height="280"></canvas>
+    </div>
+
+    <div class="section-head">
+      <h3>Despesas por categoria</h3>
+    </div>
+    <div class="breakdown-card" id="breakdownWrap"></div>
+  </section>
+
   <!-- ===== BOTTOM NAV ===== -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-tab="inicio">
@@ -164,6 +270,10 @@
     <button class="nav-btn" data-tab="historico">
       <span class="nb-icon">📋</span>
       <span class="nb-label">Histórico</span>
+    </button>
+    <button class="nav-btn" data-tab="stats">
+      <span class="nb-icon">📊</span>
+      <span class="nb-label">Estatísticas</span>
     </button>
   </nav>
 
@@ -193,6 +303,27 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- ===== NAME EDIT MODAL ===== -->
+  <div class="modal-overlay" id="nameModal">
+    <div class="modal-sheet small">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <h3>Editar nome</h3>
+        <button class="close-btn" id="closeNameModalBtn">✕</button>
+      </div>
+      <div class="name-modal-body">
+        <div class="field">
+          <label for="nameModalInput">Como podemos te chamar?</label>
+          <input type="text" id="nameModalInput" placeholder="Seu nome" autocomplete="off">
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn btn-outline" id="cancelNameBtn">Cancelar</button>
+          <button class="btn btn-primary" id="saveNameBtn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <canvas id="renderCanvas" style="display:none;"></canvas>
