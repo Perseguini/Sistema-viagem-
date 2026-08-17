@@ -755,13 +755,17 @@
             <span class="l">Líquido</span>
             <span class="v">${fmtMoney(c.liquido)}</span>
           </div>
-          <button class="comissao-paga-btn ${t.comissaoPaga ? "is-paid" : ""}" data-id="${t.id}" type="button">
-            ${t.comissaoPaga ? "✅ Comissão paga" : "💰 Marcar comissão como paga"}
-          </button>`;
-        card.querySelector(".comissao-paga-btn").addEventListener("click", (e) => {
-          e.stopPropagation();
-          toggleComissaoPaga(t.id);
-        });
+          ${t.comissaoPaga
+            ? `<div class="comissao-paga-badge">✅ Comissão paga${t.comissaoPagaEm ? " em " + fmtDateOnly(t.comissaoPagaEm) : ""}</div>`
+            : `<button class="comissao-paga-btn" data-id="${t.id}" type="button">💰 Marcar comissão como paga</button>`
+          }`;
+        const pagaBtn = card.querySelector(".comissao-paga-btn");
+        if (pagaBtn) {
+          pagaBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            marcarComissaoPaga(t.id);
+          });
+        }
         card.querySelector(".menu-btn").addEventListener("click", (e) => {
           e.stopPropagation();
           openTripModal(t.id);
@@ -805,12 +809,14 @@
   const modal = document.getElementById("tripModal");
   let currentModalTripId = null;
 
-  function toggleComissaoPaga(id) {
+  function marcarComissaoPaga(id) {
     const t = trips.find((x) => x.id === id);
-    if (!t) return;
-    t.comissaoPaga = !t.comissaoPaga;
+    if (!t || t.comissaoPaga) return;
+    if (!confirm("Marcar a comissão desta viagem como paga? Depois de confirmado, não será possível desfazer.")) return;
+    t.comissaoPaga = true;
+    t.comissaoPagaEm = new Date().toISOString();
     saveTrips(trips);
-    toast(t.comissaoPaga ? "Comissão marcada como paga" : "Comissão marcada como pendente");
+    toast("Comissão marcada como paga");
     renderHistorico();
     renderInicio();
     if (modal.classList.contains("open") && currentModalTripId === id) {
@@ -853,13 +859,17 @@
 
       <div class="resumo-row final commission"><span class="rl">Comissão (${c.comissaoPct}%)</span><span class="rv">${fmtMoney(c.comissaoValor)}</span></div>
       <div class="resumo-row" style="padding-top:10px;">
-        <button class="comissao-paga-btn ${t.comissaoPaga ? "is-paid" : ""}" id="modalComissaoPagaBtn" type="button" style="width:100%;">
-          ${t.comissaoPaga ? "✅ Comissão paga" : "💰 Marcar comissão como paga"}
-        </button>
+        ${t.comissaoPaga
+          ? `<div class="comissao-paga-badge" style="width:100%;">✅ Comissão paga${t.comissaoPagaEm ? " em " + fmtDateOnly(t.comissaoPagaEm) : ""}</div>`
+          : `<button class="comissao-paga-btn" id="modalComissaoPagaBtn" type="button" style="width:100%;">💰 Marcar comissão como paga</button>`
+        }
       </div>
     `;
     modal.classList.add("open");
-    document.getElementById("modalComissaoPagaBtn").addEventListener("click", () => toggleComissaoPaga(t.id));
+    const modalPagaBtn = document.getElementById("modalComissaoPagaBtn");
+    if (modalPagaBtn) {
+      modalPagaBtn.addEventListener("click", () => marcarComissaoPaga(t.id));
+    }
   }
 
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);

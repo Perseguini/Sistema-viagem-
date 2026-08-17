@@ -1027,6 +1027,7 @@ html:not([data-theme="dark"]) select option {
 
 .comissao-paga-btn {
   display: block;
+  width: 100%;
   margin-top: 10px;
   border: 1.5px solid var(--border);
   background: var(--bg);
@@ -1037,10 +1038,18 @@ html:not([data-theme="dark"]) select option {
   border-radius: var(--radius-sm);
 }
 
-.comissao-paga-btn.is-paid {
-  border-color: var(--green);
+.comissao-paga-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  border: 1.5px solid var(--green);
   background: var(--green-soft);
   color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
 }
 
 .other-months-label {
