@@ -1211,7 +1211,26 @@
   }
 
   /* ---------------- Manual update check ---------------- */
-  document.getElementById("appVersionLabel").textContent = `Versão: ${APP_VERSION}`;
+  const appVersionLabel = document.getElementById("appVersionLabel");
+  appVersionLabel.textContent = `Versão: ${APP_VERSION}`;
+
+  // Tries to read the real last-modified date of app.js from the server,
+  // so the label reflects the actual last time the app was published —
+  // instead of relying on someone remembering to edit APP_VERSION by hand.
+  function refreshVersionLabel() {
+    fetch("app.js", { method: "HEAD", cache: "no-store" })
+      .then((res) => {
+        const lm = res.headers.get("Last-Modified");
+        if (!lm) return;
+        const d = new Date(lm);
+        if (isNaN(d.getTime())) return;
+        appVersionLabel.textContent = `Versão: ${fmtDate(d.toISOString())}`;
+      })
+      .catch(() => {
+        /* offline or server didn't send the header — keep the fallback label */
+      });
+  }
+  refreshVersionLabel();
 
   document.getElementById("checkUpdateBtn").addEventListener("click", async () => {
     const btn = document.getElementById("checkUpdateBtn");
