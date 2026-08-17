@@ -651,6 +651,7 @@
       despesasExtras: currentExpenses
         .filter((e) => e.desc.trim() || toNumber(e.valor))
         .map((e) => ({ id: e.id, desc: e.desc.trim(), valor: toNumber(e.valor) })),
+      comissaoPaga: false,
     };
     trips.push(t);
     saveTrips(trips);
@@ -753,7 +754,14 @@
           <div class="liquido-pill">
             <span class="l">Líquido</span>
             <span class="v">${fmtMoney(c.liquido)}</span>
-          </div>`;
+          </div>
+          <button class="comissao-paga-btn ${t.comissaoPaga ? "is-paid" : ""}" data-id="${t.id}" type="button">
+            ${t.comissaoPaga ? "✅ Comissão paga" : "💰 Marcar comissão como paga"}
+          </button>`;
+        card.querySelector(".comissao-paga-btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleComissaoPaga(t.id);
+        });
         card.querySelector(".menu-btn").addEventListener("click", (e) => {
           e.stopPropagation();
           openTripModal(t.id);
@@ -797,6 +805,19 @@
   const modal = document.getElementById("tripModal");
   let currentModalTripId = null;
 
+  function toggleComissaoPaga(id) {
+    const t = trips.find((x) => x.id === id);
+    if (!t) return;
+    t.comissaoPaga = !t.comissaoPaga;
+    saveTrips(trips);
+    toast(t.comissaoPaga ? "Comissão marcada como paga" : "Comissão marcada como pendente");
+    renderHistorico();
+    renderInicio();
+    if (modal.classList.contains("open") && currentModalTripId === id) {
+      openTripModal(id);
+    }
+  }
+
   function openTripModal(id) {
     const t = trips.find((x) => x.id === id);
     if (!t) return;
@@ -831,8 +852,14 @@
       <div class="resumo-row divider"><span class="rl">Valor líquido</span><span class="rv">${fmtMoney(c.liquido)}</span></div>
 
       <div class="resumo-row final commission"><span class="rl">Comissão (${c.comissaoPct}%)</span><span class="rv">${fmtMoney(c.comissaoValor)}</span></div>
+      <div class="resumo-row" style="padding-top:10px;">
+        <button class="comissao-paga-btn ${t.comissaoPaga ? "is-paid" : ""}" id="modalComissaoPagaBtn" type="button" style="width:100%;">
+          ${t.comissaoPaga ? "✅ Comissão paga" : "💰 Marcar comissão como paga"}
+        </button>
+      </div>
     `;
     modal.classList.add("open");
+    document.getElementById("modalComissaoPagaBtn").addEventListener("click", () => toggleComissaoPaga(t.id));
   }
 
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);

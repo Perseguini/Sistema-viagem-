@@ -1025,6 +1025,24 @@ html:not([data-theme="dark"]) select option {
   color: var(--green);
 }
 
+.comissao-paga-btn {
+  display: block;
+  margin-top: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.comissao-paga-btn.is-paid {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
 .other-months-label {
   padding: 4px 18px 8px;
   font-size: 11.5px;
