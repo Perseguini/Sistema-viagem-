@@ -19,315 +19,310 @@
 </head>
 <body>
 <div id="loginOverlay" class="login-overlay">
-  <div class="login-card">
-    <div class="login-badge">🚛</div>
-    <h1>Sistema Perseguini</h1>
-    <p>Controle de viagens e fretes</p>
-
-    <button class="btn-google-fallback" id="googleLoginBtn">
-      <span class="g-icon">G</span> Continuar com Google
-    </button>
-
-    <div class="login-divider"><span>ou</span></div>
-
-    <button class="btn btn-outline login-guest-btn" id="guestLoginBtn">Entrar sem login</button>
-    <p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
-  </div>
+<div class="login-card">
+<div class="login-badge">🚛</div>
+<h1>Sistema Perseguini</h1>
+<p>Controle de viagens e fretes</p>
+<button class="btn-google-fallback" id="googleLoginBtn">
+<span class="g-icon">G</span> Continuar com Google
+</button>
+<div class="login-divider"><span>ou</span></div>
+<button class="btn btn-outline login-guest-btn" id="guestLoginBtn">Entrar sem login</button>
+<p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
+</div>
 </div>
 
 <div id="app">
+<!-- ===== TOPBAR ===== -->
+<div class="topbar" id="topbar">
+<div class="topbar-left">
+<div class="brand" id="topbarBrand">
+<div class="brand-badge">🚛</div>
+<div class="brand-text">
+<span class="title">Sistema Perseguini</span>
+<span class="subtitle" id="topbarSubtitle">Controle de viagens e fretes</span>
+</div>
+</div>
+<div class="topbar-title-row" id="topbarTitleRow" style="display:none;">
+<h2 id="topbarTitleText">Histórico de viagens</h2>
+</div>
+</div>
+<div class="topbar-right">
+<button class="filter-btn" id="filterBtn" aria-label="Filtro" style="display:none;">
+<span></span><span></span><span></span>
+</button>
+<button class="theme-toggle" id="themeToggleBtn" aria-label="Alternar tema">🌙</button>
+</div>
+</div>
 
+<!-- ===== SCREEN: INÍCIO ===== -->
+<section class="screen active" id="screen-inicio">
+<div class="hero">
+<p class="greeting">
+<span id="greetingText">Olá, Motorista! 👋</span>
+<button class="edit-name" id="editNameBtn">editar</button>
+<button class="logout-name-btn" id="logoutMainBtn" title="Sair da conta">🚪 Sair</button>
+</p>
+<p class="sub">Bem-vindo ao seu sistema de controle de viagens e fretes.</p>
+</div>
 
-  <!-- ===== TOPBAR ===== -->
-  <div class="topbar" id="topbar">
-    <div class="topbar-left">
-      <div class="brand" id="topbarBrand">
-        <div class="brand-badge">🚛</div>
-        <div class="brand-text">
-          <span class="title">Sistema Perseguini</span>
-          <span class="subtitle" id="topbarSubtitle">Controle de viagens e fretes</span>
-        </div>
-      </div>
-      <div class="topbar-title-row" id="topbarTitleRow" style="display:none;">
-        <h2 id="topbarTitleText">Histórico de viagens</h2>
-      </div>
-    </div>
-    <div class="topbar-right">
-      <button class="filter-btn" id="filterBtn" aria-label="Filtro" style="display:none;">
-        <span></span><span></span><span></span>
-      </button>
-      <button class="theme-toggle" id="themeToggleBtn" aria-label="Alternar tema">🌙</button>
-    </div>
-  </div>
+<div class="user-chip" id="userChip" style="display:none;">
+<img id="userChipPic" class="user-chip-pic" alt="">
+<span id="userChipEmail" class="user-chip-email"></span>
+</div>
 
-  <!-- ===== SCREEN: INÍCIO ===== -->
-  <section class="screen active" id="screen-inicio">
-    <div class="hero">
-      <p class="greeting">
-        <span id="greetingText">Olá, Motorista! 👋</span>
-        <button class="edit-name" id="editNameBtn">editar</button>
-        <button class="logout-name-btn" id="logoutMainBtn" title="Sair da conta">🚪 Sair</button>
-      </p>
-      <p class="sub">Bem-vindo ao seu sistema de controle de viagens e fretes.</p>
-    </div>
+<div class="stat-row single">
+<div class="stat-card blue">
+<div class="icon">🧾</div>
+<div class="value" id="statTrips">0</div>
+<div class="label">viagens realizadas</div>
+</div>
+</div>
 
-    <div class="user-chip" id="userChip" style="display:none;">
-      <img id="userChipPic" class="user-chip-pic" alt="">
-      <span id="userChipEmail" class="user-chip-email"></span>
-    </div>
+<div class="install-card" id="installCard" style="display:none;">
+<div class="ic">📲</div>
+<div class="txt">
+<div class="t1">Instalar aplicativo</div>
+<div class="t2">Tenha acesso rápido, mesmo offline</div>
+</div>
+<button id="installBtn">Instalar</button>
+</div>
 
-    <div class="stat-row single">
-      <div class="stat-card blue">
-        <div class="icon">🧾</div>
-        <div class="value" id="statTrips">0</div>
-        <div class="label">viagens realizadas</div>
-      </div>
-    </div>
+<div class="section-head">
+<h3>Última viagem</h3>
+<span class="link" data-goto="historico">Ver todas</span>
+</div>
+<div id="lastTripWrap"></div>
 
-    <div class="install-card" id="installCard" style="display:none;">
-      <div class="ic">📲</div>
-      <div class="txt">
-        <div class="t1">Instalar aplicativo</div>
-        <div class="t2">Tenha acesso rápido, mesmo offline</div>
-      </div>
-      <button id="installBtn">Instalar</button>
-    </div>
+<div class="update-check">
+<button class="update-link" id="checkUpdateBtn">🔄 Verificar atualizações</button>
+<p class="update-version" id="appVersionLabel"></p>
+</div>
+</section>
 
-    <div class="section-head">
-      <h3>Última viagem</h3>
-      <span class="link" data-goto="historico">Ver todas</span>
-    </div>
-    <div id="lastTripWrap"></div>
+<!-- ===== SCREEN: NOVA VIAGEM ===== -->
+<section class="screen" id="screen-nova">
+<div class="form-wrap">
+<div class="form-card">
+<p class="fc-title">Dados da viagem</p>
+<div class="field">
+<label for="fDestino">Destino</label>
+<input type="text" id="fDestino" placeholder="Ex: Curitiba - PR" autocomplete="off">
+</div>
+<div class="field">
+<label for="fCliente">Cliente (empresa fretada)</label>
+<input type="text" id="fCliente" placeholder="Ex: Transportes Perseguini Ltda" autocomplete="off">
+</div>
+<div class="field">
+<label for="fProduto">Produto transportado</label>
+<input type="text" id="fProduto" placeholder="Ex: Grãos, móveis, carga geral..." autocomplete="off">
+</div>
+<div class="field">
+<label for="fData">Data da viagem</label>
+<input type="datetime-local" id="fData">
+</div>
+</div>
 
-    <div class="update-check">
-      <button class="update-link" id="checkUpdateBtn">🔄 Verificar atualizações</button>
-      <p class="update-version" id="appVersionLabel"></p>
-    </div>
-  </section>
+<div class="form-card">
+<p class="fc-title">Valores</p>
+<div class="field">
+<label for="fFrete">Frete (R$)</label>
+<div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fFrete" placeholder="0,00"></div>
+</div>
+<div class="field">
+<label for="fDiesel">Diesel (R$)</label>
+<div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fDiesel" placeholder="0,00"></div>
+</div>
+<div class="field">
+<label for="fPedagio">Pedágio (R$)</label>
+<div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fPedagio" placeholder="0,00"></div>
+</div>
+<div class="field">
+<label for="fBorracharia">Borracharia (R$)</label>
+<div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fBorracharia" placeholder="0,00"></div>
+</div>
+<div class="field">
+<label for="fCaixinha">Caixinha (R$)</label>
+<div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fCaixinha" placeholder="0,00"></div>
+</div>
+<div class="field">
+<label for="fOutros">Outros (R$)</label>
+<div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fOutros" placeholder="0,00"></div>
+</div>
+<div class="field">
+<label for="fComissao">Comissão (%)</label>
+<input inputmode="decimal" id="fComissao" placeholder="0">
+</div>
+</div>
 
-  <!-- ===== SCREEN: NOVA VIAGEM ===== -->
-  <section class="screen" id="screen-nova">
-    <div class="form-wrap">
-      <div class="form-card">
-        <p class="fc-title">Dados da viagem</p>
-        <div class="field">
-          <label for="fDestino">Destino</label>
-          <input type="text" id="fDestino" placeholder="Ex: Curitiba - PR" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="fCliente">Cliente (empresa fretada)</label>
-          <input type="text" id="fCliente" placeholder="Ex: Transportes Perseguini Ltda" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="fProduto">Produto transportado</label>
-          <input type="text" id="fProduto" placeholder="Ex: Grãos, móveis, carga geral..." autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="fData">Data da viagem</label>
-          <input type="datetime-local" id="fData">
-        </div>
-      </div>
+<div class="form-card">
+<div class="fc-title-row">
+<p class="fc-title" style="margin:0;">Despesas do trajeto</p>
+<button class="add-expense-btn" id="btnAddExpense" type="button">+ Adicionar</button>
+</div>
+<p class="fc-hint">Lance gastos extras conforme eles acontecem durante a viagem.</p>
+<div id="expenseListWrap"></div>
+</div>
 
-      <div class="form-card">
-        <p class="fc-title">Valores</p>
-        <div class="field">
-          <label for="fFrete">Frete (R$)</label>
-          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fFrete" placeholder="0,00"></div>
-        </div>
-        <div class="field">
-          <label for="fDiesel">Diesel (R$)</label>
-          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fDiesel" placeholder="0,00"></div>
-        </div>
-        <div class="field">
-          <label for="fPedagio">Pedágio (R$)</label>
-          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fPedagio" placeholder="0,00"></div>
-        </div>
-        <div class="field">
-          <label for="fBorracharia">Borracharia (R$)</label>
-          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fBorracharia" placeholder="0,00"></div>
-        </div>
-        <div class="field">
-          <label for="fCaixinha">Caixinha (R$)</label>
-          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fCaixinha" placeholder="0,00"></div>
-        </div>
-        <div class="field">
-          <label for="fOutros">Outros (R$)</label>
-          <div class="money-wrap"><span>R$</span><input inputmode="decimal" id="fOutros" placeholder="0,00"></div>
-        </div>
-        <div class="field">
-          <label for="fComissao">Comissão (%)</label>
-          <input inputmode="decimal" id="fComissao" placeholder="0">
-        </div>
-      </div>
+<div class="summary-box">
+<p class="fc-title">Resumo da viagem</p>
+<div class="sum-row"><span>Total de gastos</span><span id="sumGastos">R$ 0,00</span></div>
+<div class="sum-row"><span>Líquido da viagem</span><span id="sumLiquido">R$ 0,00</span></div>
+<div class="sum-row total commission">
+<span class="lbl" id="sumComissaoLabel">Comissão</span>
+<span class="val" id="sumComissao">R$ 0,00</span>
+</div>
+</div>
 
-      <div class="form-card">
-        <div class="fc-title-row">
-          <p class="fc-title" style="margin:0;">Despesas do trajeto</p>
-          <button class="add-expense-btn" id="btnAddExpense" type="button">+ Adicionar</button>
-        </div>
-        <p class="fc-hint">Lance gastos extras conforme eles acontecem durante a viagem.</p>
-        <div id="expenseListWrap"></div>
-      </div>
+<div class="btn-row">
+<button class="btn btn-outline" id="btnLimpar">🗑️ Limpar</button>
+<button class="btn btn-primary" id="btnSalvar">💾 Salvar viagem</button>
+</div>
+</div>
+</section>
 
-      <div class="summary-box">
-        <p class="fc-title">Resumo da viagem</p>
-        <div class="sum-row"><span>Total de gastos</span><span id="sumGastos">R$ 0,00</span></div>
-        <div class="sum-row"><span>Líquido da viagem</span><span id="sumLiquido">R$ 0,00</span></div>
-        <div class="sum-row total commission">
-          <span class="lbl" id="sumComissaoLabel">Comissão</span>
-          <span class="val" id="sumComissao">R$ 0,00</span>
-        </div>
-      </div>
+<!-- ===== SCREEN: HISTÓRICO ===== -->
+<section class="screen" id="screen-historico">
+<div class="period-box">
+<p class="fc-title" style="margin:0;">Selecione o período</p>
+<p class="period-desc">Navegue por ano e mês para visualizar suas viagens.</p>
+<div class="selector-row">
+<select id="selYear"></select>
+<select id="selMonth"></select>
+</div>
+</div>
+<div id="monthsWrap"></div>
+</section>
 
-      <div class="btn-row">
-        <button class="btn btn-outline" id="btnLimpar">🗑️ Limpar</button>
-        <button class="btn btn-primary" id="btnSalvar">💾 Salvar viagem</button>
-      </div>
-    </div>
-  </section>
+<!-- ===== SCREEN: ESTATÍSTICAS ===== -->
+<section class="screen" id="screen-stats">
+<div class="period-box">
+<p class="fc-title" style="margin:0;">Período de análise</p>
+<p class="period-desc">Acompanhe seu desempenho por mês ou pelo ano inteiro.</p>
+<div class="selector-row">
+<select id="statsYear"></select>
+<select id="statsMode">
+<option value="month">Por mês</option>
+<option value="year">Ano inteiro</option>
+</select>
+</div>
+<div class="selector-row" id="statsMonthRow" style="margin-top:10px;">
+<select id="statsMonth"></select>
+</div>
+</div>
 
-  <!-- ===== SCREEN: HISTÓRICO ===== -->
-  <section class="screen" id="screen-historico">
-    <div class="period-box">
-      <p class="fc-title" style="margin:0;">Selecione o período</p>
-      <p class="period-desc">Navegue por ano e mês para visualizar suas viagens.</p>
-      <div class="selector-row">
-        <select id="selYear"></select>
-        <select id="selMonth"></select>
-      </div>
-    </div>
+<div class="stats-cards">
+<div class="stats-card">
+<div class="sc-label">Faturamento (frete)</div>
+<div class="sc-value" id="statFaturamento">R$ 0,00</div>
+</div>
+<div class="stats-card">
+<div class="sc-label">Despesas totais</div>
+<div class="sc-value expense" id="statDespesas">R$ 0,00</div>
+</div>
+<div class="stats-card">
+<div class="sc-label">Comissão total</div>
+<div class="sc-value commission" id="statComissaoTotal">R$ 0,00</div>
+</div>
+<div class="stats-card highlight">
+<div class="sc-label">Lucro líquido</div>
+<div class="sc-value profit" id="statLucro">R$ 0,00</div>
+</div>
+<div class="stats-card">
+<div class="sc-label">Viagens no período</div>
+<div class="sc-value" id="statQtdViagens">0</div>
+</div>
+<div class="stats-card">
+<div class="sc-label">Ticket médio</div>
+<div class="sc-value" id="statTicketMedio">R$ 0,00</div>
+</div>
+</div>
 
-    <div id="monthsWrap"></div>
-  </section>
+<div class="section-head">
+<h3>Líquido por mês</h3>
+</div>
+<div class="chart-card">
+<canvas id="statsChart" width="700" height="280"></canvas>
+</div>
 
-  <!-- ===== SCREEN: ESTATÍSTICAS ===== -->
-  <section class="screen" id="screen-stats">
-    <div class="period-box">
-      <p class="fc-title" style="margin:0;">Período de análise</p>
-      <p class="period-desc">Acompanhe seu desempenho por mês ou pelo ano inteiro.</p>
-      <div class="selector-row">
-        <select id="statsYear"></select>
-        <select id="statsMode">
-          <option value="month">Por mês</option>
-          <option value="year">Ano inteiro</option>
-        </select>
-      </div>
-      <div class="selector-row" id="statsMonthRow" style="margin-top:10px;">
-        <select id="statsMonth"></select>
-      </div>
-    </div>
+<div class="section-head">
+<h3>Despesas por categoria</h3>
+</div>
+<div class="breakdown-card" id="breakdownWrap"></div>
 
-    <div class="stats-cards">
-      <div class="stats-card">
-        <div class="sc-label">Faturamento (frete)</div>
-        <div class="sc-value" id="statFaturamento">R$ 0,00</div>
-      </div>
-      <div class="stats-card">
-        <div class="sc-label">Despesas totais</div>
-        <div class="sc-value expense" id="statDespesas">R$ 0,00</div>
-      </div>
-      <div class="stats-card">
-        <div class="sc-label">Comissão total</div>
-        <div class="sc-value commission" id="statComissaoTotal">R$ 0,00</div>
-      </div>
-      <div class="stats-card highlight">
-        <div class="sc-label">Lucro líquido</div>
-        <div class="sc-value profit" id="statLucro">R$ 0,00</div>
-      </div>
-      <div class="stats-card">
-        <div class="sc-label">Viagens no período</div>
-        <div class="sc-value" id="statQtdViagens">0</div>
-      </div>
-      <div class="stats-card">
-        <div class="sc-label">Ticket médio</div>
-        <div class="sc-value" id="statTicketMedio">R$ 0,00</div>
-      </div>
-    </div>
+<div class="btn-row" style="margin-top:16px;">
+<button class="btn btn-primary" id="btnShareStats">📤 Compartilhar resultado</button>
+</div>
+</section>
 
-    <div class="section-head">
-      <h3>Líquido por mês</h3>
-    </div>
-    <div class="chart-card">
-      <canvas id="statsChart" width="700" height="280"></canvas>
-    </div>
+<!-- ===== BOTTOM NAV ===== -->
+<nav class="bottom-nav">
+<button class="nav-btn active" data-tab="inicio">
+<span class="nb-icon">🏠</span>
+<span class="nb-label">Início</span>
+</button>
+<button class="nav-btn" data-tab="nova">
+<span class="nb-icon">➕</span>
+<span class="nb-label">Nova viagem</span>
+</button>
+<button class="nav-btn" data-tab="historico">
+<span class="nb-icon">📋</span>
+<span class="nb-label">Histórico</span>
+</button>
+<button class="nav-btn" data-tab="stats">
+<span class="nb-icon">📊</span>
+<span class="nb-label">Estatísticas</span>
+</button>
+</nav>
 
-    <div class="section-head">
-      <h3>Despesas por categoria</h3>
-    </div>
-    <div class="breakdown-card" id="breakdownWrap"></div>
-  </section>
+<!-- ===== TRIP DETAIL / SHARE MODAL ===== -->
+<div class="modal-overlay" id="tripModal">
+<div class="modal-sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<h3>Resumo da viagem</h3>
+<button class="close-btn" id="closeModalBtn">✕</button>
+</div>
+<div class="resumo-card" id="resumoCard">
+<div class="resumo-header">
+<p class="rh-title">Sistema Perseguini</p>
+<p class="rh-sub">Resumo da viagem</p>
+</div>
+<div class="resumo-body" id="resumoBody"></div>
+</div>
+<div class="sheet-actions">
+<button class="btn btn-outline" id="btnDeleteTrip">🗑️ Excluir</button>
+<button class="btn btn-secondary" id="btnDownloadImg">🖼️ Baixar imagem</button>
+<button class="btn btn-primary" id="btnShareImg">📤 Compartilhar</button>
+</div>
+</div>
+</div>
 
-  <!-- ===== BOTTOM NAV ===== -->
-  <nav class="bottom-nav">
-    <button class="nav-btn active" data-tab="inicio">
-      <span class="nb-icon">🏠</span>
-      <span class="nb-label">Início</span>
-    </button>
-    <button class="nav-btn" data-tab="nova">
-      <span class="nb-icon">➕</span>
-      <span class="nb-label">Nova viagem</span>
-    </button>
-    <button class="nav-btn" data-tab="historico">
-      <span class="nb-icon">📋</span>
-      <span class="nb-label">Histórico</span>
-    </button>
-    <button class="nav-btn" data-tab="stats">
-      <span class="nb-icon">📊</span>
-      <span class="nb-label">Estatísticas</span>
-    </button>
-  </nav>
+<div class="toast" id="toast"></div>
 
-  <!-- ===== TRIP DETAIL / SHARE MODAL ===== -->
-  <div class="modal-overlay" id="tripModal">
-    <div class="modal-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-header">
-        <h3>Resumo da viagem</h3>
-        <button class="close-btn" id="closeModalBtn">✕</button>
-      </div>
-
-      <div class="resumo-card" id="resumoCard">
-        <div class="resumo-header">
-          <p class="rh-title">Sistema Perseguini</p>
-          <p class="rh-sub">Resumo da viagem</p>
-        </div>
-        <div class="resumo-body" id="resumoBody"></div>
-      </div>
-
-      <div class="sheet-actions">
-        <button class="btn btn-outline" id="btnDeleteTrip">🗑️ Excluir</button>
-        <button class="btn btn-secondary" id="btnDownloadImg">🖼️ Baixar imagem</button>
-        <button class="btn btn-primary" id="btnShareImg">📤 Compartilhar</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="toast" id="toast"></div>
-
-  <!-- ===== NAME EDIT MODAL ===== -->
-  <div class="modal-overlay" id="nameModal">
-    <div class="modal-sheet small">
-      <div class="sheet-handle"></div>
-      <div class="sheet-header">
-        <h3>Editar nome</h3>
-        <button class="close-btn" id="closeNameModalBtn">✕</button>
-      </div>
-      <div class="name-modal-body">
-        <div class="field">
-          <label for="nameModalInput">Como podemos te chamar?</label>
-          <input type="text" id="nameModalInput" placeholder="Seu nome" autocomplete="off">
-        </div>
-        <div class="btn-row" style="margin-top:16px;">
-          <button class="btn btn-outline" id="cancelNameBtn">Cancelar</button>
-          <button class="btn btn-primary" id="saveNameBtn">Salvar</button>
-        </div>
-      </div>
-    </div>
-  </div>
+<!-- ===== NAME EDIT MODAL ===== -->
+<div class="modal-overlay" id="nameModal">
+<div class="modal-sheet small">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<h3>Editar nome</h3>
+<button class="close-btn" id="closeNameModalBtn">✕</button>
+</div>
+<div class="name-modal-body">
+<div class="field">
+<label for="nameModalInput">Como podemos te chamar?</label>
+<input type="text" id="nameModalInput" placeholder="Seu nome" autocomplete="off">
+</div>
+<div class="btn-row" style="margin-top:16px;">
+<button class="btn btn-outline" id="cancelNameBtn">Cancelar</button>
+<button class="btn btn-primary" id="saveNameBtn">Salvar</button>
+</div>
+</div>
+</div>
+</div>
 </div>
 
 <canvas id="renderCanvas" style="display:none;"></canvas>
-
 <script src="app.js"></script>
 </body>
 </html>

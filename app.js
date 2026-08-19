@@ -1240,6 +1240,149 @@
       .join("");
   }
 
+  /* ---------------- Stats image generation + share ---------------- */
+  function buildStatsImageBlob() {
+    return new Promise((resolve) => {
+      const year = parseInt(statsYearSel.value, 10);
+      const isYearMode = statsModeSel.value === "year";
+      const month = isYearMode ? null : parseInt(statsMonthSel.value, 10);
+      const periodLabel = isYearMode ? `Ano ${year}` : `${MONTH_NAMES[month]} de ${year}`;
+
+      const periodTrips = tripsForPeriod(year, month);
+      const totals = periodTrips.reduce(
+        (acc, t) => {
+          const c = computeTrip(t);
+          acc.frete += c.frete;
+          acc.despesas += c.totalGastos - c.comissaoValor;
+          acc.comissao += c.comissaoValor;
+          acc.liquido += c.liquido;
+          return acc;
+        },
+        { frete: 0, despesas: 0, comissao: 0, liquido: 0 }
+      );
+      const qtd = periodTrips.length;
+      const ticketMedio = qtd ? totals.liquido / qtd : 0;
+
+      const rows = [
+        ["Faturamento (frete)", fmtMoney(totals.frete)],
+        ["Despesas totais", fmtMoney(totals.despesas)],
+        ["Comissão total", fmtMoney(totals.comissao)],
+        ["Viagens no período", String(qtd)],
+        ["Ticket médio", fmtMoney(ticketMedio)],
+      ];
+
+      const W = 900;
+      const scale = 2;
+      const headerH = 160;
+      const padX = 46;
+      const cardPad = 24;
+      let bodyH = 60;
+      bodyH += rows.length * 46;
+      bodyH += 26;
+      bodyH += 76;
+      bodyH += 30;
+      const H = headerH + bodyH + 40;
+
+      const canvas = document.getElementById("renderCanvas");
+      canvas.width = W * scale;
+      canvas.height = H * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+
+      // background
+      ctx.fillStyle = "#F4F5F9";
+      ctx.fillRect(0, 0, W, H);
+
+      // header
+      ctx.fillStyle = "#10142B";
+      ctx.fillRect(0, 0, W, headerH);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "800 34px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("Sistema Perseguini", padX, 78);
+      ctx.font = "500 20px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillText(`Relatório · ${periodLabel}`, padX, 112);
+
+      // card
+      const cardX = 34;
+      const cardY = headerH - 34;
+      const cardW = W - cardX * 2;
+      const cardH = H - cardY - 34;
+      roundRect(ctx, cardX, cardY, cardW, cardH, 22);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fill();
+      ctx.strokeStyle = "#ECEDF3";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      let y = cardY + cardPad + 30;
+      const lx = cardX + cardPad;
+      const rx = cardX + cardW - cardPad;
+
+      rows.forEach(([label, txt]) => {
+        ctx.fillStyle = "#6B7080";
+        ctx.font = "600 19px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        ctx.fillText(label, lx, y);
+        ctx.fillStyle = "#1A1D29";
+        ctx.font = "700 19px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+        const w = ctx.measureText(txt).width;
+        ctx.fillText(txt, rx - w, y);
+        y += 46;
+      });
+
+      y += 6;
+      ctx.strokeStyle = "#ECEDF3";
+      ctx.beginPath();
+      ctx.moveTo(lx, y);
+      ctx.lineTo(rx, y);
+      ctx.stroke();
+      y += 46;
+
+      ctx.fillStyle = "#1A1D29";
+      ctx.font = "800 24px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      ctx.fillText("Lucro líquido", lx, y);
+
+      ctx.fillStyle = totals.liquido >= 0 ? "#1FAB56" : "#E1543A";
+      ctx.font = "900 34px -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      const liqTxt = fmtMoney(totals.liquido);
+      const liqW = ctx.measureText(liqTxt).width;
+      ctx.fillText(liqTxt, rx - liqW, y + 4);
+
+      canvas.toBlob((blob) => resolve(blob), "image/png", 1.0);
+    });
+  }
+
+  const btnShareStats = document.getElementById("btnShareStats");
+  if (btnShareStats) {
+    btnShareStats.addEventListener("click", async () => {
+      const blob = await buildStatsImageBlob();
+      const file = new File([blob], "resultado-perseguini.png", { type: "image/png" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "Sistema Perseguini",
+            text: "Resultado do período",
+          });
+          return;
+        } catch (e) {
+          /* usuário cancelou ou não suportado, cai para download */
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "resultado-perseguini.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast("Compartilhamento indisponível — imagem baixada");
+    });
+  }
+
   /* ---------------- Service worker ---------------- */
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
