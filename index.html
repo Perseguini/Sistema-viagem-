@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="style.css">
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div id="loginOverlay" class="login-overlay">
@@ -69,6 +70,7 @@
 <div class="user-chip" id="userChip" style="display:none;">
 <img id="userChipPic" class="user-chip-pic" alt="">
 <span id="userChipEmail" class="user-chip-email"></span>
+<button class="user-chip-cloud" id="userChipCloudBtn" title="Salvar na nuvem">☁️</button>
 </div>
 
 <div class="stat-row single">
@@ -320,6 +322,26 @@
 </div>
 </div>
 </div>
+
+<!-- ===== CLOUD SYNC MODAL ===== -->
+<div class="modal-overlay" id="cloudModal">
+<div class="modal-sheet small">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<h3>☁️ Dados na nuvem</h3>
+<button class="close-btn" id="closeCloudModalBtn">✕</button>
+</div>
+<div class="name-modal-body">
+<p class="fc-hint">Seus dados ficam salvos na nuvem vinculados ao e-mail <strong id="cloudModalEmail"></strong>. Cada e-mail tem seus próprios dados, separados dos demais.</p>
+<p class="update-version" id="cloudSyncStatus"></p>
+<div class="btn-row" style="margin-top:16px;">
+<button class="btn btn-outline" id="btnCloudRestore">🔄 Restaurar da nuvem</button>
+<button class="btn btn-primary" id="btnCloudSave">☁️ Salvar na nuvem</button>
+</div>
+</div>
+</div>
+</div>
+
 </div>
 
 <canvas id="renderCanvas" style="display:none;"></canvas>

@@ -380,6 +380,161 @@
     return firebaseAuth;
   }
 
+  /* ---------------- Cloud sync (Firestore, por e-mail) ---------------- */
+  // Cada usuário logado tem seus dados guardados em um documento próprio na
+  // coleção "usuarios_dados", identificado pelo e-mail da conta Google. Assim
+  // os dados de cada e-mail ficam separados dos demais na nuvem.
+  const LAST_SYNC_KEY = "perseguini_last_sync_v1";
+  let firestoreDb = null;
+
+  function initFirestore() {
+    if (!window.firebase || firestoreDb) return firestoreDb;
+    try {
+      initFirebase();
+      if (firebase.firestore) firestoreDb = firebase.firestore();
+    } catch (e) {
+      console.error("Falha ao iniciar Firestore:", e);
+    }
+    return firestoreDb;
+  }
+
+  // Normaliza o e-mail (minúsculas, sem espaços nas pontas) antes de usá-lo
+  // como chave, para "Joao@Gmail.com" e "joao@gmail.com" caírem sempre no
+  // mesmo documento/registro em vez de gerarem dados duplicados.
+  function normalizeEmail(email) {
+    return String(email || "").trim().toLowerCase();
+  }
+
+  function cloudDocRef(email) {
+    const db = initFirestore();
+    const key = normalizeEmail(email);
+    if (!db || !key) return null;
+    return db.collection("usuarios_dados").doc(key);
+  }
+
+  function getLastSync(email) {
+    try {
+      const map = JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || "{}");
+      return map[normalizeEmail(email)] || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function setLastSync(email) {
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || "{}"); } catch (e) {}
+    map[normalizeEmail(email)] = new Date().toISOString();
+    localStorage.setItem(LAST_SYNC_KEY, JSON.stringify(map));
+  }
+
+  async function saveToCloud() {
+    const user = getUser();
+    if (!user || !user.email) {
+      toast("Entre com sua conta Google para salvar na nuvem.");
+      return;
+    }
+    const ref = cloudDocRef(user.email);
+    if (!ref) {
+      toast("Não foi possível conectar à nuvem. Verifique sua conexão.");
+      return;
+    }
+    setCloudButtonsLoading(true, "save");
+    try {
+      await ref.set({
+        email: normalizeEmail(user.email),
+        name: getName(),
+        trips: trips,
+        updatedAt: new Date().toISOString(),
+      });
+      setLastSync(user.email);
+      updateCloudModalStatus();
+      toast("Dados salvos na nuvem! ☁️");
+    } catch (e) {
+      console.error("Erro ao salvar na nuvem:", e);
+      toast("Não foi possível salvar na nuvem. Tente novamente.");
+    } finally {
+      setCloudButtonsLoading(false, "save");
+    }
+  }
+
+  async function restoreFromCloud() {
+    const user = getUser();
+    if (!user || !user.email) {
+      toast("Entre com sua conta Google para restaurar da nuvem.");
+      return;
+    }
+    const ref = cloudDocRef(user.email);
+    if (!ref) {
+      toast("Não foi possível conectar à nuvem. Verifique sua conexão.");
+      return;
+    }
+    if (!confirm("Isso vai substituir os dados salvos neste aparelho pelos dados da nuvem. Continuar?")) return;
+    setCloudButtonsLoading(true, "restore");
+    try {
+      const snap = await ref.get();
+      if (!snap.exists) {
+        toast("Nenhum dado salvo na nuvem para este e-mail ainda.");
+        return;
+      }
+      const data = snap.data();
+      trips = Array.isArray(data.trips) ? data.trips : [];
+      saveTrips(trips);
+      if (data.name) setName(data.name);
+      setLastSync(user.email);
+      updateCloudModalStatus();
+      renderInicio();
+      renderHistorico();
+      toast("Dados restaurados da nuvem! 🔄");
+    } catch (e) {
+      console.error("Erro ao restaurar da nuvem:", e);
+      toast("Não foi possível restaurar da nuvem. Tente novamente.");
+    } finally {
+      setCloudButtonsLoading(false, "restore");
+    }
+  }
+
+  function setCloudButtonsLoading(loading, which) {
+    const saveBtn = document.getElementById("btnCloudSave");
+    const restoreBtn = document.getElementById("btnCloudRestore");
+    if (saveBtn) saveBtn.disabled = loading;
+    if (restoreBtn) restoreBtn.disabled = loading;
+    if (which === "save" && saveBtn) saveBtn.textContent = loading ? "☁️ Salvando..." : "☁️ Salvar na nuvem";
+    if (which === "restore" && restoreBtn) restoreBtn.textContent = loading ? "🔄 Restaurando..." : "🔄 Restaurar da nuvem";
+  }
+
+  function updateCloudModalStatus() {
+    const user = getUser();
+    const statusEl = document.getElementById("cloudSyncStatus");
+    if (!statusEl) return;
+    if (!user || !user.email) {
+      statusEl.textContent = "";
+      return;
+    }
+    const last = getLastSync(user.email);
+    statusEl.textContent = last ? `Última sincronização: ${fmtDate(last)}` : "Ainda não sincronizado nesta conta.";
+  }
+
+  const cloudModal = document.getElementById("cloudModal");
+  function openCloudModal() {
+    const user = getUser();
+    if (!user || !user.email) {
+      toast("Entre com sua conta Google para usar a nuvem.");
+      return;
+    }
+    document.getElementById("cloudModalEmail").textContent = user.email;
+    updateCloudModalStatus();
+    cloudModal.classList.add("open");
+  }
+  function closeCloudModal() { cloudModal.classList.remove("open"); }
+
+  const userChipCloudBtn = document.getElementById("userChipCloudBtn");
+  if (userChipCloudBtn) userChipCloudBtn.addEventListener("click", openCloudModal);
+  document.getElementById("closeCloudModalBtn").addEventListener("click", closeCloudModal);
+  cloudModal.addEventListener("click", (e) => { if (e.target === cloudModal) closeCloudModal(); });
+  document.getElementById("btnCloudSave").addEventListener("click", saveToCloud);
+  document.getElementById("btnCloudRestore").addEventListener("click", restoreFromCloud);
+
   function setGoogleBtnLoading(loading) {
     if (!googleLoginBtn) return;
     googleLoginBtn.disabled = loading;

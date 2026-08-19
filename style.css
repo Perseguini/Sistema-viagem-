@@ -1734,6 +1734,22 @@ html[data-theme="dark"] .expense-row .money-wrap input:focus {
   border-radius: 20px;
 }
 
+.user-chip-cloud {
+  border: none;
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1;
+  padding: 7px 9px;
+  border-radius: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.user-chip-cloud:active {
+  opacity: 0.7;
+}
+
 /* =========================================================
    NAME MODAL
    ========================================================= */
