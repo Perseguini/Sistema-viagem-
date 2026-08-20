@@ -19,18 +19,49 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
-<div id="loginOverlay" class="login-overlay">
-<div class="login-card">
-<div class="login-badge">🚛</div>
-<h1>Sistema Perseguini</h1>
-<p>Controle de viagens e fretes</p>
-<button class="btn-google-fallback" id="googleLoginBtn">
-<span class="g-icon">G</span> Continuar com Google
-</button>
-<div class="login-divider"><span>ou</span></div>
-<button class="btn btn-outline login-guest-btn" id="guestLoginBtn">Entrar sem login</button>
-<p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
-</div>
+<div id="loginOverlay" class="login-overlay open">
+  <div class="phone-login-card">
+    <div class="phone-login-brand">🚛</div>
+    <h1 id="loginTitle">Sistema Perseguini</h1>
+    <p class="phone-login-subtitle" id="loginSubtitle">Uma nova experiência de controlar suas viagens</p>
+
+    <div id="loginChoiceStep" class="login-step">
+      <label class="terms-check"><input type="checkbox" id="termsCheck"><span>Declaro que li e estou de acordo com os <b>TERMOS DE USO</b> e <b>PRIVACIDADE</b>.</span></label>
+      <button class="phone-choice-btn primary" id="createAccountBtn">CRIAR UMA NOVA CONTA</button>
+      <button class="phone-choice-btn secondary" id="existingAccountBtn">JÁ TENHO CONTA</button>
+    </div>
+
+    <div id="phoneStep" class="login-step" style="display:none;">
+      <div class="phone-page-title">Insira o número do seu telefone</div>
+      <div class="phone-input-row">
+        <div class="country-box"><span>🇧🇷</span><b>BR</b><span>+55</span><span>▾</span></div>
+        <div class="phone-field-wrap"><label>Número de telefone</label><input id="phoneInput" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(41) 99999-9999" maxlength="15"></div>
+      </div>
+      <button class="phone-confirm-btn" id="sendCodeBtn">CONFIRMAR NÚMERO DE TELEFONE</button>
+      <button class="login-back-btn" id="backToChoiceBtn">← Voltar</button>
+      <p class="phone-help">Você receberá um SMS para confirmar o número. Tarifas de mensagens e dados podem ser cobradas.</p>
+    </div>
+
+    <div id="codeStep" class="login-step" style="display:none;">
+      <div class="phone-page-title">Confirme seu número</div>
+      <p class="phone-help">Enviamos um código por SMS para <strong id="sentPhoneLabel"></strong>.</p>
+      <div class="field login-code-field"><label>Código de verificação</label><input id="codeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></div>
+      <button class="phone-confirm-btn" id="verifyCodeBtn">CONFIRMAR CÓDIGO</button>
+      <button class="login-back-btn" id="backToPhoneBtn">← Alterar número</button>
+    </div>
+
+    <div id="profileStep" class="login-step" style="display:none;">
+      <div class="phone-page-title">Complete seu cadastro</div>
+      <div class="field"><label>Nome</label><input id="profileNameInput" type="text" placeholder="Nome do usuário" autocomplete="name"></div>
+      <div class="field"><label>Perfil</label><div class="role-choice-row"><button class="role-choice active" data-role="motorista" type="button">🚚 Motorista</button><button class="role-choice" data-role="gestor" type="button">👨‍💼 Gestor</button></div></div>
+      <div class="field" id="managerCodeField" style="display:none;"><label>Código de autorização do gestor</label><input id="managerCodeInput" type="password" placeholder="Código do gestor" autocomplete="off"></div>
+      <p class="phone-help">O perfil de Gestor terá acesso ao cadastro da frota e designação dos motoristas.</p>
+      <button class="phone-confirm-btn" id="finishProfileBtn">ENTRAR NO SISTEMA</button>
+    </div>
+
+    <div id="recaptcha-container"></div>
+    <p class="login-note" id="loginNote">Seus dados antigos deste aparelho serão preservados e poderão ser sincronizados com seu número.</p>
+  </div>
 </div>
 
 <div id="app">
@@ -69,9 +100,10 @@
 
 <div class="user-chip" id="userChip" style="display:none;">
 <img id="userChipPic" class="user-chip-pic" alt="">
-<span id="userChipEmail" class="user-chip-email"></span>
-<button class="user-chip-cloud" id="userChipCloudBtn" title="Salvar na nuvem">☁️</button>
+<div class="user-chip-info"><span id="userChipPhone" class="user-chip-email"></span><span id="userChipRole" class="role-pill"></span></div>
+<button class="user-chip-cloud" id="userChipCloudBtn" title="Sincronizar dados">☁️</button>
 </div>
+<div class="assigned-truck-card" id="assignedTruckHome" style="display:none;"></div>
 
 <div class="stat-row single">
 <div class="stat-card blue">
@@ -102,9 +134,19 @@
 </div>
 </section>
 
+<!-- ===== SCREEN: FROTA ===== -->
+<section class="screen" id="screen-frota">
+  <div class="fleet-head">
+    <div><p class="fc-title" style="margin:0;">Frota</p><p class="period-desc" id="fleetSubtitle">Veículos cadastrados e motoristas.</p></div>
+    <div class="fleet-head-actions"><button class="btn btn-outline fleet-add-btn" id="btnAddDriver">+ Motorista</button><button class="btn btn-primary fleet-add-btn" id="btnAddVehicle">+ Veículo</button></div>
+  </div>
+  <div id="fleetWrap"></div>
+</section>
+
 <!-- ===== SCREEN: NOVA VIAGEM ===== -->
 <section class="screen" id="screen-nova">
 <div class="form-wrap">
+<div class="assigned-trip-vehicle" id="tripVehicleCard"></div>
 <div class="form-card">
 <p class="fc-title">Dados da viagem</p>
 <div class="field">
@@ -267,6 +309,10 @@
 <span class="nb-icon">➕</span>
 <span class="nb-label">Nova viagem</span>
 </button>
+<button class="nav-btn" data-tab="frota">
+<span class="nb-icon">🚛</span>
+<span class="nb-label">Frota</span>
+</button>
 <button class="nav-btn" data-tab="historico">
 <span class="nb-icon">📋</span>
 <span class="nb-label">Histórico</span>
@@ -323,6 +369,36 @@
 </div>
 </div>
 
+<!-- ===== DRIVER MODAL ===== -->
+<div class="modal-overlay" id="driverModal">
+<div class="modal-sheet small">
+<div class="sheet-handle"></div>
+<div class="sheet-header"><h3>Cadastrar motorista</h3><button class="close-btn" id="closeDriverModalBtn">✕</button></div>
+<div class="name-modal-body">
+<div class="field"><label>Nome do motorista</label><input id="driverNameInput" type="text" placeholder="Nome completo" autocomplete="name"></div>
+<div class="field"><label>Telefone</label><input id="driverPhoneInput" type="tel" inputmode="numeric" placeholder="(41) 99999-9999" maxlength="15"></div>
+<p class="phone-help">O motorista receberá acesso quando entrar no aplicativo com este mesmo número.</p>
+<div class="btn-row" style="margin-top:16px;"><button class="btn btn-outline" id="cancelDriverBtn">Cancelar</button><button class="btn btn-primary" id="saveDriverBtn">Salvar motorista</button></div>
+</div>
+</div>
+</div>
+
+<!-- ===== VEHICLE MODAL ===== -->
+<div class="modal-overlay" id="vehicleModal">
+<div class="modal-sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-header"><h3 id="vehicleModalTitle">Novo veículo</h3><button class="close-btn" id="closeVehicleModalBtn">✕</button></div>
+<div class="name-modal-body">
+<div class="field"><label>Placa</label><input id="vehiclePlateInput" type="text" placeholder="ABC1D23" maxlength="8" autocomplete="off"></div>
+<div class="field"><label>Nome/modelo do caminhão</label><input id="vehicleNameInput" type="text" placeholder="Scania R440" autocomplete="off"></div>
+<div class="field"><label>Motorista</label><select id="vehicleDriverSelect"><option value="">Sem motorista designado</option></select></div>
+<div class="field"><label>Fotos do veículo (até 3)</label><input id="vehiclePhotosInput" type="file" accept="image/*" multiple></div>
+<div id="vehiclePhotoPreview" class="vehicle-photo-preview"></div>
+<div class="btn-row" style="margin-top:16px;"><button class="btn btn-outline" id="cancelVehicleBtn">Cancelar</button><button class="btn btn-primary" id="saveVehicleBtn">Salvar veículo</button></div>
+</div>
+</div>
+</div>
+
 <!-- ===== CLOUD SYNC MODAL ===== -->
 <div class="modal-overlay" id="cloudModal">
 <div class="modal-sheet small">
@@ -332,7 +408,7 @@
 <button class="close-btn" id="closeCloudModalBtn">✕</button>
 </div>
 <div class="name-modal-body">
-<p class="fc-hint">Seus dados ficam salvos na nuvem vinculados ao e-mail <strong id="cloudModalEmail"></strong>. Cada e-mail tem seus próprios dados, separados dos demais.</p>
+<p class="fc-hint">Seus dados ficam salvos na nuvem vinculados ao telefone <strong id="cloudModalPhone"></strong>. Assim você pode recuperar suas viagens em outro aparelho.</p>
 <p class="update-version" id="cloudSyncStatus"></p>
 <div class="btn-row" style="margin-top:16px;">
 <button class="btn btn-outline" id="btnCloudRestore">🔄 Restaurar da nuvem</button>
