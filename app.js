@@ -342,7 +342,7 @@
         <div class="pin">📍</div>
         <div class="info">
           <div class="dest">${escapeHtml(t.destino || "Sem destino")}</div>
-          <div class="date">${fmtDate(t.data)}</div>
+          <div class="date">${fmtDate(t.data)}${t.caminhaoPlaca ? " • 🚛 " + escapeHtml(t.caminhaoPlaca) : ""}</div>
         </div>
       </div>
       <div class="right">
@@ -1285,11 +1285,24 @@
   /* ---------------- Histórico screen ---------------- */
   const selYear = document.getElementById("selYear");
   const selMonth = document.getElementById("selMonth");
+  const selPlaca = document.getElementById("selPlaca");
 
   function availableYears() {
     const years = new Set(trips.map((t) => new Date(t.data).getFullYear()));
     years.add(new Date().getFullYear());
     return [...years].sort((a, b) => b - a);
+  }
+
+  // Preenche o select de placa (Histórico/Estatísticas) com "Todos os
+  // caminhões" + os caminhões da frota, mantendo a seleção atual se ainda
+  // for válida.
+  function fillPlacaFilterOptions(sel) {
+    const prev = sel.value;
+    const sorted = [...frota].sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+    sel.innerHTML =
+      `<option value="">Todos os caminhões</option>` +
+      sorted.map((c) => `<option value="${c.id}">🚛 ${escapeHtml(c.placa || "Sem placa")}</option>`).join("");
+    if (sorted.some((c) => c.id === prev)) sel.value = prev;
   }
 
   function renderHistorico() {
@@ -1304,21 +1317,27 @@
       selMonth.value = String(new Date().getMonth());
     }
 
+    fillPlacaFilterOptions(selPlaca);
+
     renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10));
   }
 
   selYear.addEventListener("change", () => renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10)));
   selMonth.addEventListener("change", () => renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10)));
+  selPlaca.addEventListener("change", () => renderMonths(parseInt(selYear.value, 10), parseInt(selMonth.value, 10)));
 
   document.getElementById("filterBtn").addEventListener("click", () => {
     document.querySelector(".period-box").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   function tripsForMonth(year, month) {
+    const placaFiltro = selPlaca.value;
     return trips
       .filter((t) => {
         const d = new Date(t.data);
-        return d.getFullYear() === year && d.getMonth() === month;
+        if (d.getFullYear() !== year || d.getMonth() !== month) return false;
+        if (placaFiltro && t.caminhaoId !== placaFiltro) return false;
+        return true;
       })
       .sort((a, b) => new Date(b.data) - new Date(a.data));
   }
@@ -1363,7 +1382,7 @@
               <div class="pin">📍</div>
               <div>
                 <div class="dest">${escapeHtml(t.destino || "Sem destino")}</div>
-                <div class="date">${fmtDate(t.data)}${t.cliente ? " • " + escapeHtml(t.cliente) : ""}</div>
+                <div class="date">${fmtDate(t.data)}${t.cliente ? " • " + escapeHtml(t.cliente) : ""}${t.caminhaoPlaca ? " • 🚛 " + escapeHtml(t.caminhaoPlaca) : ""}</div>
               </div>
             </div>
             <button class="menu-btn" data-id="${t.id}" aria-label="Opções">⋮</button>
@@ -1700,6 +1719,7 @@
   const statsMonthSel = document.getElementById("statsMonth");
   const statsModeSel = document.getElementById("statsMode");
   const statsMonthRow = document.getElementById("statsMonthRow");
+  const statsPlacaSel = document.getElementById("statsPlaca");
 
   function buildStatsSelectsIfNeeded() {
     if (!statsMonthSel.dataset.built) {
@@ -1707,6 +1727,7 @@
       statsMonthSel.dataset.built = "1";
       statsMonthSel.value = String(new Date().getMonth());
     }
+    fillPlacaFilterOptions(statsPlacaSel);
   }
 
   statsModeSel.addEventListener("change", () => {
@@ -1715,11 +1736,15 @@
   });
   statsYearSel.addEventListener("change", renderStats);
   statsMonthSel.addEventListener("change", renderStats);
+  statsPlacaSel.addEventListener("change", renderStats);
 
   function tripsForPeriod(year, month) {
+    const placaFiltro = statsPlacaSel.value;
     return trips.filter((t) => {
       const d = new Date(t.data);
-      return d.getFullYear() === year && (month === null || d.getMonth() === month);
+      if (d.getFullYear() !== year || (month !== null && d.getMonth() !== month)) return false;
+      if (placaFiltro && t.caminhaoId !== placaFiltro) return false;
+      return true;
     });
   }
 
@@ -1779,7 +1804,9 @@
     ctx.clearRect(0, 0, cssWidth, cssHeight);
 
     const monthlyLiquido = Array.from({ length: 12 }, () => 0);
+    const placaFiltro = statsPlacaSel.value;
     trips.forEach((t) => {
+      if (placaFiltro && t.caminhaoId !== placaFiltro) return;
       const d = new Date(t.data);
       if (d.getFullYear() === year) monthlyLiquido[d.getMonth()] += computeTrip(t).liquido;
     });
@@ -1869,7 +1896,9 @@
       const year = parseInt(statsYearSel.value, 10);
       const isYearMode = statsModeSel.value === "year";
       const month = isYearMode ? null : parseInt(statsMonthSel.value, 10);
-      const periodLabel = isYearMode ? `Ano ${year}` : `${MONTH_NAMES[month]} de ${year}`;
+      const placaFiltro = statsPlacaSel.value;
+      const caminhaoFiltrado = placaFiltro ? frota.find((c) => c.id === placaFiltro) : null;
+      const periodLabel = (isYearMode ? `Ano ${year}` : `${MONTH_NAMES[month]} de ${year}`) + (caminhaoFiltrado ? ` · 🚛 ${caminhaoFiltrado.placa || ""}` : "");
 
       const periodTrips = tripsForPeriod(year, month);
       const totals = periodTrips.reduce(
