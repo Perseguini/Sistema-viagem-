@@ -257,6 +257,41 @@
 </div>
 </section>
 
+<!-- ===== SCREEN: FROTA ===== -->
+<section class="screen" id="screen-frota">
+<div class="form-wrap">
+
+<div class="form-card" id="frotaFormCard">
+<div class="fc-title-row">
+<p class="fc-title" style="margin:0;" id="frotaFormTitle">Adicionar caminhão</p>
+</div>
+<p class="fc-hint">Cadastre os caminhões da frota com placa e motorista responsável.</p>
+<div class="field">
+<label for="fFrotaPlaca">Placa</label>
+<input type="text" id="fFrotaPlaca" placeholder="Ex: ABC1D23" autocomplete="off" maxlength="8" style="text-transform:uppercase;">
+</div>
+<div class="field">
+<label for="fFrotaMotorista">Motorista</label>
+<input type="text" id="fFrotaMotorista" placeholder="Nome do motorista" autocomplete="off">
+</div>
+<div class="field">
+<label for="fFrotaModelo">Modelo / observação (opcional)</label>
+<input type="text" id="fFrotaModelo" placeholder="Ex: Scania R450, Truck 6x2..." autocomplete="off">
+</div>
+<div class="btn-row">
+<button class="btn btn-outline" id="btnFrotaCancelEdit" type="button" style="display:none;">Cancelar</button>
+<button class="btn btn-primary" id="btnFrotaSalvar" type="button">💾 Salvar caminhão</button>
+</div>
+</div>
+
+<div class="section-head">
+<h3>Caminhões cadastrados</h3>
+</div>
+<div id="frotaListWrap"></div>
+
+</div>
+</section>
+
 <!-- ===== BOTTOM NAV ===== -->
 <nav class="bottom-nav">
 <button class="nav-btn active" data-tab="inicio">
@@ -270,6 +305,10 @@
 <button class="nav-btn" data-tab="historico">
 <span class="nb-icon">📋</span>
 <span class="nb-label">Histórico</span>
+</button>
+<button class="nav-btn" data-tab="frota">
+<span class="nb-icon">🚚</span>
+<span class="nb-label">Frota</span>
 </button>
 <button class="nav-btn" data-tab="stats">
 <span class="nb-icon">📊</span>
@@ -318,6 +357,24 @@
 <div class="btn-row" style="margin-top:16px;">
 <button class="btn btn-outline" id="cancelNameBtn">Cancelar</button>
 <button class="btn btn-primary" id="saveNameBtn">Salvar</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ===== FROTA: DELETE CONFIRM MODAL ===== -->
+<div class="modal-overlay" id="frotaDeleteModal">
+<div class="modal-sheet small">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<h3>Excluir caminhão</h3>
+<button class="close-btn" id="closeFrotaDeleteModalBtn">✕</button>
+</div>
+<div class="name-modal-body">
+<p class="fc-hint" id="frotaDeleteText">Tem certeza que deseja excluir este caminhão da frota?</p>
+<div class="btn-row" style="margin-top:16px;">
+<button class="btn btn-outline" id="cancelFrotaDeleteBtn">Cancelar</button>
+<button class="btn btn-primary" id="confirmFrotaDeleteBtn">🗑️ Excluir</button>
 </div>
 </div>
 </div>

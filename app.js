@@ -9,6 +9,14 @@
   const THEME_KEY = "perseguini_theme_v1";
   const USER_KEY = "perseguini_user_v1";
   const SKIP_LOGIN_KEY = "perseguini_skip_login_v1";
+  const FROTA_KEY = "perseguini_frota_v1";
+  // Papel do usuário logado dentro da frota (gestor | motorista). Ainda não há
+  // tela de configuração para trocar isso — por padrão todo mundo é "gestor",
+  // então as ações de cadastro/edição/exclusão da Frota ficam liberadas.
+  // Quando o sistema de permissões for implementado, basta popular esta
+  // chave (ex: no login ou num cadastro de usuários) que as telas de Frota
+  // já vão reagir sozinhas, pois toda a UI consulta canManageFrota().
+  const ROLE_KEY = "perseguini_role_v1";
 
   /*
    * Firebase project config (from Firebase Console → Project settings → General → Your apps).
@@ -43,7 +51,34 @@
     localStorage.setItem(NAME_KEY, name);
   }
 
+  function loadFrota() {
+    try {
+      const raw = localStorage.getItem(FROTA_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveFrota(list) {
+    localStorage.setItem(FROTA_KEY, JSON.stringify(list));
+  }
+
+  // ---- Permissões da Frota (preparado para o futuro) ----
+  // Hoje sempre retorna "gestor" e libera tudo. Futuramente, isso deve ler o
+  // papel real do usuário (definido no cadastro/convite dele) e:
+  //   - "gestor": pode cadastrar, editar e excluir caminhões da frota;
+  //   - "motorista": só visualiza a frota (e talvez só o próprio caminhão).
+  function getUserRole() {
+    return localStorage.getItem(ROLE_KEY) || "gestor";
+  }
+  function canManageFrota() {
+    return getUserRole() === "gestor";
+  }
+
   let trips = loadTrips();
+  let frota = loadFrota();
+  let editingFrotaId = null;
 
   /* ---------------- Formatting helpers ---------------- */
   function toNumber(v) {
@@ -179,6 +214,7 @@
     inicio: document.getElementById("screen-inicio"),
     nova: document.getElementById("screen-nova"),
     historico: document.getElementById("screen-historico"),
+    frota: document.getElementById("screen-frota"),
     stats: document.getElementById("screen-stats"),
   };
   const navBtns = document.querySelectorAll(".nav-btn");
@@ -188,6 +224,7 @@
     inicio: "Controle de viagens e fretes",
     nova: "Preencha os dados da viagem",
     historico: "Suas viagens por período",
+    frota: "Caminhões e motoristas",
     stats: "Relatórios e desempenho",
   };
 
@@ -211,6 +248,7 @@
 
     if (tab === "historico") renderHistorico();
     if (tab === "inicio") renderInicio();
+    if (tab === "frota") renderFrota();
     if (tab === "stats") renderStats();
     window.scrollTo(0, 0);
   }
@@ -277,6 +315,161 @@
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     })[m]);
   }
+
+  /* ---------------- Frota (caminhões e motoristas) ---------------- */
+  function frotaUid() {
+    return "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  const frotaPlacaInput = document.getElementById("fFrotaPlaca");
+  const frotaMotoristaInput = document.getElementById("fFrotaMotorista");
+  const frotaModeloInput = document.getElementById("fFrotaModelo");
+  const frotaFormTitle = document.getElementById("frotaFormTitle");
+  const btnFrotaSalvar = document.getElementById("btnFrotaSalvar");
+  const btnFrotaCancelEdit = document.getElementById("btnFrotaCancelEdit");
+
+  if (frotaPlacaInput) {
+    frotaPlacaInput.addEventListener("input", () => {
+      frotaPlacaInput.value = frotaPlacaInput.value.toUpperCase();
+    });
+  }
+
+  function renderFrota() {
+    // A visualização é liberada pra qualquer papel; só ações de gestão
+    // (cadastrar/editar/excluir) ficam atrás de canManageFrota().
+    const podeGerenciar = canManageFrota();
+    const formCard = document.getElementById("frotaFormCard");
+    if (formCard) formCard.style.display = podeGerenciar ? "" : "none";
+
+    const wrap = document.getElementById("frotaListWrap");
+    wrap.innerHTML = "";
+
+    if (!frota.length) {
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <div class="emoji">🚚</div>
+          <div class="title">Nenhum caminhão cadastrado</div>
+          <div class="desc">${podeGerenciar ? "Cadastre acima os caminhões da frota e o motorista de cada um." : "Ainda não há caminhões cadastrados na frota."}</div>
+        </div>`;
+      return;
+    }
+
+    const sorted = [...frota].sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+    sorted.forEach((c) => wrap.appendChild(buildFrotaItem(c, podeGerenciar)));
+  }
+
+  function buildFrotaItem(c, podeGerenciar) {
+    const div = document.createElement("div");
+    div.className = "frota-item";
+    div.innerHTML = `
+      <div class="left">
+        <div class="truck-icon">🚛</div>
+        <div class="info">
+          <div class="placa">${escapeHtml(c.placa || "Sem placa")}</div>
+          <div class="motorista">${escapeHtml(c.motorista || "Sem motorista definido")}</div>
+          ${c.modelo ? `<div class="modelo">${escapeHtml(c.modelo)}</div>` : ""}
+        </div>
+      </div>
+      ${podeGerenciar ? `
+      <div class="right">
+        <button class="icon-btn" data-action="edit" aria-label="Editar">✏️</button>
+        <button class="icon-btn" data-action="delete" aria-label="Excluir">🗑️</button>
+      </div>` : ""}`;
+    if (podeGerenciar) {
+      div.querySelector('[data-action="edit"]').addEventListener("click", () => startEditFrota(c.id));
+      div.querySelector('[data-action="delete"]').addEventListener("click", () => openFrotaDeleteModal(c.id));
+    }
+    return div;
+  }
+
+  function clearFrotaForm() {
+    frotaPlacaInput.value = "";
+    frotaMotoristaInput.value = "";
+    frotaModeloInput.value = "";
+    editingFrotaId = null;
+    frotaFormTitle.textContent = "Adicionar caminhão";
+    btnFrotaSalvar.textContent = "💾 Salvar caminhão";
+    btnFrotaCancelEdit.style.display = "none";
+  }
+
+  function startEditFrota(id) {
+    const c = frota.find((x) => x.id === id);
+    if (!c) return;
+    editingFrotaId = id;
+    frotaPlacaInput.value = c.placa || "";
+    frotaMotoristaInput.value = c.motorista || "";
+    frotaModeloInput.value = c.modelo || "";
+    frotaFormTitle.textContent = "Editar caminhão";
+    btnFrotaSalvar.textContent = "💾 Atualizar caminhão";
+    btnFrotaCancelEdit.style.display = "";
+    frotaPlacaInput.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  btnFrotaCancelEdit.addEventListener("click", clearFrotaForm);
+
+  btnFrotaSalvar.addEventListener("click", () => {
+    const placa = frotaPlacaInput.value.trim().toUpperCase();
+    const motorista = frotaMotoristaInput.value.trim();
+    const modelo = frotaModeloInput.value.trim();
+
+    if (!placa) {
+      toast("Informe a placa do caminhão.");
+      frotaPlacaInput.focus();
+      return;
+    }
+    if (!motorista) {
+      toast("Informe o nome do motorista.");
+      frotaMotoristaInput.focus();
+      return;
+    }
+
+    if (editingFrotaId) {
+      const c = frota.find((x) => x.id === editingFrotaId);
+      if (c) {
+        c.placa = placa;
+        c.motorista = motorista;
+        c.modelo = modelo;
+      }
+      toast("Caminhão atualizado! 🚛");
+    } else {
+      frota.push({ id: frotaUid(), placa, motorista, modelo, ativo: true });
+      toast("Caminhão cadastrado! 🚛");
+    }
+    saveFrota(frota);
+    clearFrotaForm();
+    renderFrota();
+  });
+
+  /* ---- Frota: modal de confirmação de exclusão ---- */
+  const frotaDeleteModal = document.getElementById("frotaDeleteModal");
+  let frotaPendingDeleteId = null;
+
+  function openFrotaDeleteModal(id) {
+    const c = frota.find((x) => x.id === id);
+    if (!c) return;
+    frotaPendingDeleteId = id;
+    document.getElementById("frotaDeleteText").textContent =
+      `Tem certeza que deseja excluir o caminhão ${c.placa || ""}${c.motorista ? " (" + c.motorista + ")" : ""} da frota?`;
+    frotaDeleteModal.classList.add("open");
+  }
+  function closeFrotaDeleteModal() {
+    frotaDeleteModal.classList.remove("open");
+    frotaPendingDeleteId = null;
+  }
+  document.getElementById("closeFrotaDeleteModalBtn").addEventListener("click", closeFrotaDeleteModal);
+  document.getElementById("cancelFrotaDeleteBtn").addEventListener("click", closeFrotaDeleteModal);
+  frotaDeleteModal.addEventListener("click", (e) => {
+    if (e.target === frotaDeleteModal) closeFrotaDeleteModal();
+  });
+  document.getElementById("confirmFrotaDeleteBtn").addEventListener("click", () => {
+    if (!frotaPendingDeleteId) return;
+    frota = frota.filter((x) => x.id !== frotaPendingDeleteId);
+    saveFrota(frota);
+    if (editingFrotaId === frotaPendingDeleteId) clearFrotaForm();
+    closeFrotaDeleteModal();
+    renderFrota();
+    toast("Caminhão excluído.");
+  });
 
   document.getElementById("editNameBtn").addEventListener("click", openNameModal);
 
