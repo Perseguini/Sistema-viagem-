@@ -123,6 +123,11 @@
 <label for="fData">Data da viagem</label>
 <input type="datetime-local" id="fData">
 </div>
+<div class="field" id="fCaminhaoWrap">
+<label for="fCaminhao">Caminhão</label>
+<select id="fCaminhao"></select>
+<p class="fc-hint" id="fCaminhaoHint" style="display:none;margin-top:6px;"></p>
+</div>
 </div>
 
 <div class="form-card">
@@ -289,6 +294,11 @@
 </div>
 <div id="frotaListWrap"></div>
 
+<div class="section-head" id="usuariosSectionHead" style="display:none;">
+<h3>E-mails e permissões</h3>
+<span class="link" id="btnOpenUsuarios">Gerenciar</span>
+</div>
+
 </div>
 </section>
 
@@ -375,6 +385,63 @@
 <div class="btn-row" style="margin-top:16px;">
 <button class="btn btn-outline" id="cancelFrotaDeleteBtn">Cancelar</button>
 <button class="btn btn-primary" id="confirmFrotaDeleteBtn">🗑️ Excluir</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ===== USUÁRIOS / PERMISSÕES MODAL ===== -->
+<div class="modal-overlay" id="usuariosModal">
+<div class="modal-sheet">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<h3>👤 E-mails e permissões</h3>
+<button class="close-btn" id="closeUsuariosModalBtn">✕</button>
+</div>
+<div class="name-modal-body">
+<p class="fc-hint">Cadastre os e-mails que podem acessar o sistema, a permissão de cada um e o caminhão vinculado. E-mails não cadastrados aqui entram como Motorista, com acesso restrito.</p>
+
+<div class="form-card" id="usuarioFormCard" style="margin:0 0 14px;">
+<p class="fc-title" style="margin:0 0 10px;" id="usuarioFormTitle">Adicionar e-mail</p>
+<div class="field">
+<label for="fUsuarioEmail">E-mail</label>
+<input type="email" id="fUsuarioEmail" placeholder="nome@exemplo.com" autocomplete="off">
+</div>
+<div class="field">
+<label for="fUsuarioPermissao">Permissão</label>
+<select id="fUsuarioPermissao">
+<option value="gestor">Gestor (acesso total)</option>
+<option value="motorista">Motorista (acesso restrito)</option>
+</select>
+</div>
+<div class="field">
+<label for="fUsuarioCaminhao">Caminhão vinculado</label>
+<select id="fUsuarioCaminhao"></select>
+</div>
+<div class="btn-row">
+<button class="btn btn-outline" id="btnUsuarioCancelEdit" type="button" style="display:none;">Cancelar</button>
+<button class="btn btn-primary" id="btnUsuarioSalvar" type="button">💾 Salvar e-mail</button>
+</div>
+</div>
+
+<div id="usuariosListWrap"></div>
+</div>
+</div>
+</div>
+
+<!-- ===== USUÁRIOS: DELETE CONFIRM MODAL ===== -->
+<div class="modal-overlay" id="usuarioDeleteModal">
+<div class="modal-sheet small">
+<div class="sheet-handle"></div>
+<div class="sheet-header">
+<h3>Excluir e-mail</h3>
+<button class="close-btn" id="closeUsuarioDeleteModalBtn">✕</button>
+</div>
+<div class="name-modal-body">
+<p class="fc-hint" id="usuarioDeleteText">Tem certeza que deseja excluir este e-mail da lista de permissões?</p>
+<div class="btn-row" style="margin-top:16px;">
+<button class="btn btn-outline" id="cancelUsuarioDeleteBtn">Cancelar</button>
+<button class="btn btn-primary" id="confirmUsuarioDeleteBtn">🗑️ Excluir</button>
 </div>
 </div>
 </div>

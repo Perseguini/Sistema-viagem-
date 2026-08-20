@@ -10,13 +10,12 @@
   const USER_KEY = "perseguini_user_v1";
   const SKIP_LOGIN_KEY = "perseguini_skip_login_v1";
   const FROTA_KEY = "perseguini_frota_v1";
-  // Papel do usuário logado dentro da frota (gestor | motorista). Ainda não há
-  // tela de configuração para trocar isso — por padrão todo mundo é "gestor",
-  // então as ações de cadastro/edição/exclusão da Frota ficam liberadas.
-  // Quando o sistema de permissões for implementado, basta popular esta
-  // chave (ex: no login ou num cadastro de usuários) que as telas de Frota
-  // já vão reagir sozinhas, pois toda a UI consulta canManageFrota().
-  const ROLE_KEY = "perseguini_role_v1";
+  // Lista de e-mails autorizados, cada um com uma permissão (gestor | motorista)
+  // e, opcionalmente, um caminhão da Frota vinculado. Um e-mail que ainda não
+  // está nesta lista é tratado como "motorista" (acesso restrito) — exceto no
+  // primeiro uso do app, quando a lista está totalmente vazia, para permitir
+  // que alguém consiga se cadastrar como gestor e configurar o resto.
+  const USUARIOS_KEY = "perseguini_usuarios_v1";
 
   /*
    * Firebase project config (from Firebase Console → Project settings → General → Your apps).
@@ -64,21 +63,64 @@
     localStorage.setItem(FROTA_KEY, JSON.stringify(list));
   }
 
-  // ---- Permissões da Frota (preparado para o futuro) ----
-  // Hoje sempre retorna "gestor" e libera tudo. Futuramente, isso deve ler o
-  // papel real do usuário (definido no cadastro/convite dele) e:
-  //   - "gestor": pode cadastrar, editar e excluir caminhões da frota;
-  //   - "motorista": só visualiza a frota (e talvez só o próprio caminhão).
+  function loadUsuarios() {
+    try {
+      const raw = localStorage.getItem(USUARIOS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveUsuarios(list) {
+    localStorage.setItem(USUARIOS_KEY, JSON.stringify(list));
+  }
+
+  // ---- Permissões por e-mail ----
+  // getUserRole() olha o e-mail da conta logada (Google) na lista de usuários
+  // cadastrados na Frota → "Gerenciar e-mails" e devolve a permissão dele:
+  //   - "gestor": pode cadastrar/editar/excluir caminhões e gerenciar e-mails;
+  //   - "motorista": só visualiza a frota e, em Nova viagem, fica travado no
+  //     caminhão vinculado ao próprio e-mail.
+  // Sem login (convidado) ou sem nenhum e-mail cadastrado ainda (primeiro uso,
+  // para não travar o próprio cadastro inicial), o acesso é liberado como gestor.
+  function currentUserEmail() {
+    const user = getUser();
+    return user && user.email ? normalizeEmail(user.email) : "";
+  }
+
+  function findUsuarioByEmail(email) {
+    const key = normalizeEmail(email);
+    if (!key) return null;
+    return usuarios.find((u) => normalizeEmail(u.email) === key) || null;
+  }
+
   function getUserRole() {
-    return localStorage.getItem(ROLE_KEY) || "gestor";
+    const email = currentUserEmail();
+    if (!email) return "gestor";
+    if (!usuarios.length) return "gestor";
+    const u = findUsuarioByEmail(email);
+    return u ? u.permissao : "motorista";
   }
   function canManageFrota() {
     return getUserRole() === "gestor";
   }
+  function canManageUsuarios() {
+    return getUserRole() === "gestor";
+  }
+
+  // Caminhão vinculado ao e-mail logado (usado para travar a seleção em
+  // Nova viagem quando o usuário é motorista).
+  function getUsuarioCaminhaoAtual() {
+    const u = findUsuarioByEmail(currentUserEmail());
+    return u ? u.caminhaoId || "" : "";
+  }
 
   let trips = loadTrips();
   let frota = loadFrota();
+  let usuarios = loadUsuarios();
   let editingFrotaId = null;
+  let editingUsuarioId = null;
 
   /* ---------------- Formatting helpers ---------------- */
   function toNumber(v) {
@@ -248,6 +290,7 @@
 
     if (tab === "historico") renderHistorico();
     if (tab === "inicio") renderInicio();
+    if (tab === "nova") renderNovaCaminhaoSelect();
     if (tab === "frota") renderFrota();
     if (tab === "stats") renderStats();
     window.scrollTo(0, 0);
@@ -341,6 +384,9 @@
     const formCard = document.getElementById("frotaFormCard");
     if (formCard) formCard.style.display = podeGerenciar ? "" : "none";
 
+    const usuariosHead = document.getElementById("usuariosSectionHead");
+    if (usuariosHead) usuariosHead.style.display = podeGerenciar ? "flex" : "none";
+
     const wrap = document.getElementById("frotaListWrap");
     wrap.innerHTML = "";
 
@@ -358,9 +404,15 @@
     sorted.forEach((c) => wrap.appendChild(buildFrotaItem(c, podeGerenciar)));
   }
 
+  // E-mails (cadastrados em Usuários) vinculados a um determinado caminhão.
+  function emailsVinculadosA(caminhaoId) {
+    return usuarios.filter((u) => u.caminhaoId === caminhaoId).map((u) => u.email);
+  }
+
   function buildFrotaItem(c, podeGerenciar) {
     const div = document.createElement("div");
     div.className = "frota-item";
+    const vinculados = podeGerenciar ? emailsVinculadosA(c.id) : [];
     div.innerHTML = `
       <div class="left">
         <div class="truck-icon">🚛</div>
@@ -368,6 +420,7 @@
           <div class="placa">${escapeHtml(c.placa || "Sem placa")}</div>
           <div class="motorista">${escapeHtml(c.motorista || "Sem motorista definido")}</div>
           ${c.modelo ? `<div class="modelo">${escapeHtml(c.modelo)}</div>` : ""}
+          ${vinculados.length ? `<div class="caminhao-vinc">✉️ ${escapeHtml(vinculados.join(", "))}</div>` : ""}
         </div>
       </div>
       ${podeGerenciar ? `
@@ -465,10 +518,185 @@
     if (!frotaPendingDeleteId) return;
     frota = frota.filter((x) => x.id !== frotaPendingDeleteId);
     saveFrota(frota);
+    // Desvincula esse caminhão de qualquer e-mail que apontava pra ele, pra
+    // não deixar referência órfã na lista de usuários.
+    let usuariosMudaram = false;
+    usuarios.forEach((u) => {
+      if (u.caminhaoId === frotaPendingDeleteId) {
+        u.caminhaoId = "";
+        usuariosMudaram = true;
+      }
+    });
+    if (usuariosMudaram) saveUsuarios(usuarios);
     if (editingFrotaId === frotaPendingDeleteId) clearFrotaForm();
     closeFrotaDeleteModal();
     renderFrota();
     toast("Caminhão excluído.");
+  });
+
+  /* ---------------- Usuários / permissões (e-mail → gestor/motorista) ---------------- */
+  function usuarioUid() {
+    return "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  const usuariosModal = document.getElementById("usuariosModal");
+  const usuarioEmailInput = document.getElementById("fUsuarioEmail");
+  const usuarioPermissaoSelect = document.getElementById("fUsuarioPermissao");
+  const usuarioCaminhaoSelect = document.getElementById("fUsuarioCaminhao");
+  const usuarioFormTitle = document.getElementById("usuarioFormTitle");
+  const btnUsuarioSalvar = document.getElementById("btnUsuarioSalvar");
+  const btnUsuarioCancelEdit = document.getElementById("btnUsuarioCancelEdit");
+
+  function fillUsuarioCaminhaoOptions() {
+    const sorted = [...frota].sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+    usuarioCaminhaoSelect.innerHTML =
+      `<option value="">Nenhum</option>` +
+      sorted.map((c) => `<option value="${c.id}">${escapeHtml(c.placa || "Sem placa")} — ${escapeHtml(c.motorista || "")}</option>`).join("");
+  }
+
+  function openUsuariosModal() {
+    if (!canManageUsuarios()) return;
+    fillUsuarioCaminhaoOptions();
+    clearUsuarioForm();
+    renderUsuarios();
+    usuariosModal.classList.add("open");
+  }
+  function closeUsuariosModal() { usuariosModal.classList.remove("open"); }
+
+  const btnOpenUsuarios = document.getElementById("btnOpenUsuarios");
+  if (btnOpenUsuarios) btnOpenUsuarios.addEventListener("click", openUsuariosModal);
+  document.getElementById("closeUsuariosModalBtn").addEventListener("click", closeUsuariosModal);
+  usuariosModal.addEventListener("click", (e) => { if (e.target === usuariosModal) closeUsuariosModal(); });
+
+  function renderUsuarios() {
+    const wrap = document.getElementById("usuariosListWrap");
+    wrap.innerHTML = "";
+    if (!usuarios.length) {
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <div class="emoji">👤</div>
+          <div class="title">Nenhum e-mail cadastrado</div>
+          <div class="desc">Enquanto a lista estiver vazia, qualquer e-mail logado tem acesso de gestor.</div>
+        </div>`;
+      return;
+    }
+    const sorted = [...usuarios].sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+    sorted.forEach((u) => wrap.appendChild(buildUsuarioItem(u)));
+  }
+
+  function buildUsuarioItem(u) {
+    const div = document.createElement("div");
+    div.className = "frota-item usuario-item";
+    const caminhao = u.caminhaoId ? frota.find((c) => c.id === u.caminhaoId) : null;
+    div.innerHTML = `
+      <div class="left">
+        <div class="truck-icon">👤</div>
+        <div class="info">
+          <div class="email">${escapeHtml(u.email)}</div>
+          <div class="meta">
+            <span class="perm-badge ${u.permissao === "gestor" ? "gestor" : "motorista"}">${u.permissao === "gestor" ? "Gestor" : "Motorista"}</span>
+            ${caminhao ? `<span class="caminhao-vinc">🚛 ${escapeHtml(caminhao.placa || "")}</span>` : ""}
+          </div>
+        </div>
+      </div>
+      <div class="right">
+        <button class="icon-btn" data-action="edit" aria-label="Editar">✏️</button>
+        <button class="icon-btn" data-action="delete" aria-label="Excluir">🗑️</button>
+      </div>`;
+    div.querySelector('[data-action="edit"]').addEventListener("click", () => startEditUsuario(u.id));
+    div.querySelector('[data-action="delete"]').addEventListener("click", () => openUsuarioDeleteModal(u.id));
+    return div;
+  }
+
+  function clearUsuarioForm() {
+    usuarioEmailInput.value = "";
+    usuarioPermissaoSelect.value = "motorista";
+    usuarioCaminhaoSelect.value = "";
+    editingUsuarioId = null;
+    usuarioFormTitle.textContent = "Adicionar e-mail";
+    btnUsuarioSalvar.textContent = "💾 Salvar e-mail";
+    btnUsuarioCancelEdit.style.display = "none";
+  }
+
+  function startEditUsuario(id) {
+    const u = usuarios.find((x) => x.id === id);
+    if (!u) return;
+    editingUsuarioId = id;
+    usuarioEmailInput.value = u.email || "";
+    usuarioPermissaoSelect.value = u.permissao === "gestor" ? "gestor" : "motorista";
+    usuarioCaminhaoSelect.value = u.caminhaoId || "";
+    usuarioFormTitle.textContent = "Editar e-mail";
+    btnUsuarioSalvar.textContent = "💾 Atualizar e-mail";
+    btnUsuarioCancelEdit.style.display = "";
+    usuarioEmailInput.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  btnUsuarioCancelEdit.addEventListener("click", clearUsuarioForm);
+
+  btnUsuarioSalvar.addEventListener("click", () => {
+    const email = normalizeEmail(usuarioEmailInput.value);
+    const permissao = usuarioPermissaoSelect.value === "gestor" ? "gestor" : "motorista";
+    const caminhaoId = usuarioCaminhaoSelect.value || "";
+
+    if (!email || !email.includes("@")) {
+      toast("Informe um e-mail válido.");
+      usuarioEmailInput.focus();
+      return;
+    }
+    const duplicado = usuarios.find((u) => normalizeEmail(u.email) === email && u.id !== editingUsuarioId);
+    if (duplicado) {
+      toast("Esse e-mail já está cadastrado.");
+      return;
+    }
+
+    if (editingUsuarioId) {
+      const u = usuarios.find((x) => x.id === editingUsuarioId);
+      if (u) {
+        u.email = email;
+        u.permissao = permissao;
+        u.caminhaoId = caminhaoId;
+      }
+      toast("E-mail atualizado!");
+    } else {
+      usuarios.push({ id: usuarioUid(), email, permissao, caminhaoId });
+      toast("E-mail cadastrado!");
+    }
+    saveUsuarios(usuarios);
+    clearUsuarioForm();
+    renderUsuarios();
+    renderFrota();
+  });
+
+  /* ---- Usuários: modal de confirmação de exclusão ---- */
+  const usuarioDeleteModal = document.getElementById("usuarioDeleteModal");
+  let usuarioPendingDeleteId = null;
+
+  function openUsuarioDeleteModal(id) {
+    const u = usuarios.find((x) => x.id === id);
+    if (!u) return;
+    usuarioPendingDeleteId = id;
+    document.getElementById("usuarioDeleteText").textContent =
+      `Tem certeza que deseja excluir o e-mail ${u.email} da lista de permissões?`;
+    usuarioDeleteModal.classList.add("open");
+  }
+  function closeUsuarioDeleteModal() {
+    usuarioDeleteModal.classList.remove("open");
+    usuarioPendingDeleteId = null;
+  }
+  document.getElementById("closeUsuarioDeleteModalBtn").addEventListener("click", closeUsuarioDeleteModal);
+  document.getElementById("cancelUsuarioDeleteBtn").addEventListener("click", closeUsuarioDeleteModal);
+  usuarioDeleteModal.addEventListener("click", (e) => {
+    if (e.target === usuarioDeleteModal) closeUsuarioDeleteModal();
+  });
+  document.getElementById("confirmUsuarioDeleteBtn").addEventListener("click", () => {
+    if (!usuarioPendingDeleteId) return;
+    usuarios = usuarios.filter((x) => x.id !== usuarioPendingDeleteId);
+    saveUsuarios(usuarios);
+    if (editingUsuarioId === usuarioPendingDeleteId) clearUsuarioForm();
+    closeUsuarioDeleteModal();
+    renderUsuarios();
+    renderFrota();
+    toast("E-mail excluído.");
   });
 
   document.getElementById("editNameBtn").addEventListener("click", openNameModal);
@@ -747,6 +975,8 @@
     hideLogin();
     applyUserToUI();
     renderInicio();
+    renderFrota();
+    renderNovaCaminhaoSelect();
     toast(`Bem-vindo, ${(fbUser.displayName || "").split(" ")[0] || "de volta"}!`);
   }
 
@@ -810,6 +1040,8 @@
       clearUser();
       localStorage.removeItem(SKIP_LOGIN_KEY);
       applyUserToUI();
+      renderFrota();
+      renderNovaCaminhaoSelect();
       showLogin();
     };
     if (auth) auth.signOut().then(finishLogout).catch(finishLogout);
@@ -877,7 +1109,7 @@
   }
 
   /* ---------------- Nova viagem screen ---------------- */
-  const formIds = ["fDestino", "fCliente", "fProduto", "fData", "fFrete", "fDiesel", "fPedagio", "fBorracharia", "fCaixinha", "fOutros", "fComissao"];
+  const formIds = ["fDestino", "fCliente", "fProduto", "fData", "fCaminhao", "fFrete", "fDiesel", "fPedagio", "fBorracharia", "fCaixinha", "fOutros", "fComissao"];
   const els = {};
   formIds.forEach((id) => (els[id] = document.getElementById(id)));
 
@@ -932,11 +1164,50 @@
     return d.toISOString().slice(0, 16);
   }
 
+  // Preenche o select de caminhão em Nova viagem. Motorista fica travado no
+  // caminhão vinculado ao próprio e-mail (cadastrado em Frota → Gerenciar
+  // e-mails); gestor (ou convidado) pode escolher livremente entre todos.
+  function renderNovaCaminhaoSelect() {
+    const sel = els.fCaminhao;
+    const hint = document.getElementById("fCaminhaoHint");
+    if (!sel) return;
+
+    if (getUserRole() === "motorista") {
+      const caminhaoId = getUsuarioCaminhaoAtual();
+      const c = caminhaoId ? frota.find((x) => x.id === caminhaoId) : null;
+      sel.disabled = true;
+      if (c) {
+        sel.innerHTML = `<option value="${c.id}">${escapeHtml(c.placa || "Sem placa")} — ${escapeHtml(c.motorista || "")}</option>`;
+        sel.value = c.id;
+        if (hint) hint.style.display = "none";
+      } else {
+        sel.innerHTML = `<option value="">Nenhum caminhão vinculado</option>`;
+        sel.value = "";
+        if (hint) {
+          hint.textContent = "Seu e-mail ainda não tem caminhão vinculado. Peça ao gestor para vincular em Frota → Gerenciar e-mails.";
+          hint.style.display = "block";
+        }
+      }
+      return;
+    }
+
+    // Gestor / convidado: seleção livre entre todos os caminhões da frota.
+    sel.disabled = false;
+    if (hint) hint.style.display = "none";
+    const prev = sel.value;
+    const sorted = [...frota].sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+    sel.innerHTML =
+      `<option value="">Selecione (opcional)</option>` +
+      sorted.map((c) => `<option value="${c.id}">${escapeHtml(c.placa || "Sem placa")} — ${escapeHtml(c.motorista || "")}</option>`).join("");
+    if (sorted.some((c) => c.id === prev)) sel.value = prev;
+  }
+
   function resetForm() {
     els.fDestino.value = "";
     els.fCliente.value = "";
     els.fProduto.value = "";
     els.fData.value = nowLocalInputValue();
+    renderNovaCaminhaoSelect();
     ["fFrete","fDiesel","fPedagio","fBorracharia","fCaixinha","fOutros","fComissao"].forEach((id) => (els[id].value = ""));
     currentExpenses = [];
     renderExpenseList();
@@ -983,12 +1254,15 @@
       els.fFrete.focus();
       return;
     }
+    const caminhaoSelecionado = els.fCaminhao && els.fCaminhao.value ? frota.find((c) => c.id === els.fCaminhao.value) : null;
     const t = {
       id: uid(),
       destino: els.fDestino.value.trim(),
       cliente: els.fCliente.value.trim(),
       produto: els.fProduto.value.trim(),
       data: els.fData.value ? new Date(els.fData.value).toISOString() : new Date().toISOString(),
+      caminhaoId: caminhaoSelecionado ? caminhaoSelecionado.id : "",
+      caminhaoPlaca: caminhaoSelecionado ? caminhaoSelecionado.placa || "" : "",
       frete: toNumber(els.fFrete.value),
       diesel: toNumber(els.fDiesel.value),
       pedagio: toNumber(els.fPedagio.value),
@@ -1180,6 +1454,7 @@
 
     const body = document.getElementById("resumoBody");
     const extraInfoRows = [
+      t.caminhaoPlaca ? `<div class="resumo-row" style="margin-top:8px;"><span class="rl">Caminhão</span></div><div class="resumo-row" style="padding-top:0;"><span class="rv" style="font-size:15px;">${escapeHtml(t.caminhaoPlaca)}</span></div>` : "",
       t.cliente ? `<div class="resumo-row" style="margin-top:8px;"><span class="rl">Cliente</span></div><div class="resumo-row" style="padding-top:0;"><span class="rv" style="font-size:15px;">${escapeHtml(t.cliente)}</span></div>` : "",
       t.produto ? `<div class="resumo-row" style="margin-top:8px;"><span class="rl">Produto</span></div><div class="resumo-row" style="padding-top:0;"><span class="rv" style="font-size:15px;">${escapeHtml(t.produto)}</span></div>` : "",
     ].join("");
