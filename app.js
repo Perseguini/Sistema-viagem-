@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const APP_VERSION = "20/08/2026 12:00";
+  const APP_VERSION = "14/08/2026 02:30";
 
   /* ---------------- Storage helpers ---------------- */
   const STORE_KEY = "perseguini_trips_v1";
@@ -180,7 +180,6 @@
     nova: document.getElementById("screen-nova"),
     historico: document.getElementById("screen-historico"),
     stats: document.getElementById("screen-stats"),
-    frota: document.getElementById("screen-frota"),
   };
   const navBtns = document.querySelectorAll(".nav-btn");
   const topbarSubtitle = document.getElementById("topbarSubtitle");
@@ -190,7 +189,6 @@
     nova: "Preencha os dados da viagem",
     historico: "Suas viagens por período",
     stats: "Relatórios e desempenho",
-    frota: "Frota e motoristas",
   };
 
   function goTo(tab) {
@@ -214,7 +212,6 @@
     if (tab === "historico") renderHistorico();
     if (tab === "inicio") renderInicio();
     if (tab === "stats") renderStats();
-    if (tab === "frota") renderFrota();
     window.scrollTo(0, 0);
   }
 
@@ -238,7 +235,6 @@
     document.getElementById("greetingText").textContent = `Olá, ${getName()}! 👋`;
 
     document.getElementById("statTrips").textContent = trips.length;
-    renderAssignedVehicleHome();
 
     const wrap = document.getElementById("lastTripWrap");
     if (!trips.length) {
@@ -314,40 +310,64 @@
     if (e.key === "Enter") document.getElementById("saveNameBtn").click();
   });
 
-  /* ---------------- Conta por telefone + sincronização + perfis ---------------- */
-  const ROLE_KEY = "perseguini_role_v1";
-  const MANAGER_SETUP_CODE = "PERSEGUINI-GESTOR";
-  const PROFILE_KEY = "perseguini_profile_v2";
-  const DRAFT_KEY = "perseguini_trip_draft_v1";
-  const LAST_SYNC_KEY = "perseguini_last_sync_v2";
-  let firestoreDb = null;
-  let firebaseAuth = null;
-  let currentProfile = null;
-  let confirmationResult = null;
-  let loginMode = "existing";
-  let selectedRole = "motorista";
-  let recaptchaVerifier = null;
-  let fleetVehicles = [];
-  let editingVehicleId = null;
-
-  function getProfile() {
-    try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); } catch (e) { return null; }
-  }
-  function saveProfile(profile) {
-    currentProfile = profile || null;
-    if (profile) localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-    else localStorage.removeItem(PROFILE_KEY);
-    if (profile && profile.name) setName(profile.name);
-    if (profile && profile.role) localStorage.setItem(ROLE_KEY, profile.role);
-  }
-  function getRole() { return currentProfile?.role || localStorage.getItem(ROLE_KEY) || "motorista"; }
-  function isManager() { return getRole() === "gestor"; }
-
+  /* ---------------- Login / user account ---------------- */
   function getUser() {
     try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch (e) { return null; }
   }
   function setUser(u) { localStorage.setItem(USER_KEY, JSON.stringify(u)); }
   function clearUser() { localStorage.removeItem(USER_KEY); }
+
+  function parseJwt(token) {
+    // Kept for backward compatibility with any previously stored data; not
+    // used by the current Firebase-based login flow.
+    try {
+      const base64Url = token.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        atob(base64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const loginOverlay = document.getElementById("loginOverlay");
+  function showLogin() { loginOverlay.classList.add("open"); }
+  function hideLogin() { loginOverlay.classList.remove("open"); }
+
+  function applyUserToUI() {
+    const user = getUser();
+    const chip = document.getElementById("userChip");
+    if (user) {
+      chip.style.display = "flex";
+      document.getElementById("userChipEmail").textContent = user.email || "";
+      const pic = document.getElementById("userChipPic");
+      if (user.picture) {
+        pic.src = user.picture;
+        pic.style.display = "block";
+      } else {
+        pic.style.display = "none";
+      }
+    } else {
+      chip.style.display = "none";
+    }
+  }
+
+  /* ---------------- Firebase Auth (Google) ---------------- */
+  const googleLoginBtn = document.getElementById("googleLoginBtn");
+  let firebaseAuth = null;
+
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  }
+  function isStandalonePWA() {
+    return (window.navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  }
+  // Popups are unreliable inside an installed iOS PWA (WKWebView blocks/loses
+  // them), so use a full-page redirect flow there instead.
+  const useRedirectFlow = isIOS() && isStandalonePWA();
 
   function initFirebase() {
     if (!window.firebase || firebaseAuth) return firebaseAuth;
@@ -360,562 +380,261 @@
     return firebaseAuth;
   }
 
+  /* ---------------- Cloud sync (Firestore, por e-mail) ---------------- */
+  // Cada usuário logado tem seus dados guardados em um documento próprio na
+  // coleção "usuarios_dados", identificado pelo e-mail da conta Google. Assim
+  // os dados de cada e-mail ficam separados dos demais na nuvem.
+  const LAST_SYNC_KEY = "perseguini_last_sync_v1";
+  let firestoreDb = null;
+
   function initFirestore() {
     if (!window.firebase || firestoreDb) return firestoreDb;
     try {
       initFirebase();
       if (firebase.firestore) firestoreDb = firebase.firestore();
-      if (firestoreDb && firestoreDb.enablePersistence) {
-        firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-      }
     } catch (e) {
       console.error("Falha ao iniciar Firestore:", e);
     }
     return firestoreDb;
   }
 
-  function normalizePhone(phone) { return String(phone || "").replace(/\D/g, ""); }
-  function toE164BR(phone) {
-    const digits = normalizePhone(phone);
-    if (digits.startsWith("55") && digits.length >= 12) return "+" + digits;
-    return "+55" + digits;
-  }
-  function formatPhone(phone) {
-    const d = normalizePhone(phone).replace(/^55/, "").slice(0, 11);
-    if (d.length <= 2) return d;
-    if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
-    return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}`;
+  // Normaliza o e-mail (minúsculas, sem espaços nas pontas) antes de usá-lo
+  // como chave, para "Joao@Gmail.com" e "joao@gmail.com" caírem sempre no
+  // mesmo documento/registro em vez de gerarem dados duplicados.
+  function normalizeEmail(email) {
+    return String(email || "").trim().toLowerCase();
   }
 
-  function mergeTrips(localTrips, cloudTrips) {
-    const map = new Map();
-    [...(cloudTrips || []), ...(localTrips || [])].forEach((t) => {
-      if (!t || !t.id) return;
-      const old = map.get(t.id);
-      if (!old) { map.set(t.id, t); return; }
-      const oldTime = new Date(old.updatedAt || old.data || 0).getTime();
-      const newTime = new Date(t.updatedAt || t.data || 0).getTime();
-      if (newTime >= oldTime) map.set(t.id, t);
-    });
-    return [...map.values()].sort((a,b) => new Date(b.data || 0) - new Date(a.data || 0));
-  }
-
-  function getDataDocRef() {
+  function cloudDocRef(email) {
     const db = initFirestore();
-    const u = getUser();
-    if (!db || !u?.uid) return null;
-    return db.collection("usuarios_dados_v2").doc(u.uid);
+    const key = normalizeEmail(email);
+    if (!db || !key) return null;
+    return db.collection("usuarios_dados").doc(key);
   }
 
-  function getProfileDocRef(uid) {
-    const db = initFirestore();
-    if (!db || !uid) return null;
-    return db.collection("usuarios").doc(uid);
-  }
-
-  async function syncUserData(force = false) {
-    const user = getUser();
-    if (!user?.uid) return;
-    const ref = getDataDocRef();
-    if (!ref) return;
+  function getLastSync(email) {
     try {
-      const snap = await ref.get();
-      const cloud = snap.exists ? (snap.data() || {}) : {};
-      const merged = mergeTrips(trips, Array.isArray(cloud.trips) ? cloud.trips : []);
-      const localChanged = merged.length !== trips.length || merged.some((t, i) => t.id !== trips[i]?.id || JSON.stringify(t) !== JSON.stringify(trips[i]));
-      if (localChanged) {
-        trips = merged;
-        saveTrips(trips);
-      }
-      const draft = loadDraft();
-      if (!draft && cloud.draft) saveDraft(cloud.draft, false);
-      const payload = {
-        uid: user.uid,
-        phone: user.phoneNumber || currentProfile?.phone || "",
-        name: getName(),
-        role: getRole(),
-        trips,
-        draft: loadDraft(),
-        updatedAt: new Date().toISOString()
-      };
-      if (force || !snap.exists || JSON.stringify(cloud.trips || []) !== JSON.stringify(trips) || cloud.name !== payload.name || cloud.role !== payload.role) {
-        await ref.set(payload, { merge: true });
-      }
-      setLastSync(user.uid);
-      renderInicio();
-      renderHistorico();
+      const map = JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || "{}");
+      return map[normalizeEmail(email)] || "";
     } catch (e) {
-      console.error("Erro ao sincronizar dados:", e);
+      return "";
     }
   }
 
-  function getLastSync(key) {
-    try { return JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || "{}")[key] || ""; } catch (e) { return ""; }
-  }
-  function setLastSync(key) {
+  function setLastSync(email) {
     let map = {};
     try { map = JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || "{}"); } catch (e) {}
-    map[key] = new Date().toISOString();
+    map[normalizeEmail(email)] = new Date().toISOString();
     localStorage.setItem(LAST_SYNC_KEY, JSON.stringify(map));
   }
 
-  function loadDraft() {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (e) { return null; }
-  }
-  function saveDraft(draft, sync = true) {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft || null)); } catch (e) {}
-    if (sync && getUser()?.uid) scheduleCloudDraftSync();
-  }
-  function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
-  let draftSyncTimer = null;
-  function scheduleCloudDraftSync() {
-    clearTimeout(draftSyncTimer);
-    draftSyncTimer = setTimeout(async () => {
-      const ref = getDataDocRef();
-      if (!ref) return;
-      try { await ref.set({ draft: loadDraft(), updatedAt: new Date().toISOString() }, { merge: true }); } catch (e) {}
-    }, 1800);
-  }
-
-  function buildCurrentDraft() {
-    return {
-      destino: els.fDestino.value,
-      cliente: els.fCliente.value,
-      produto: els.fProduto.value,
-      data: els.fData.value,
-      frete: els.fFrete.value,
-      diesel: els.fDiesel.value,
-      pedagio: els.fPedagio.value,
-      borracharia: els.fBorracharia.value,
-      caixinha: els.fCaixinha.value,
-      outros: els.fOutros.value,
-      comissao: els.fComissao.value,
-      despesasExtras: currentExpenses
-    };
-  }
-  function restoreDraft() {
-    const d = loadDraft();
-    if (!d) return;
-    els.fDestino.value = d.destino || "";
-    els.fCliente.value = d.cliente || "";
-    els.fProduto.value = d.produto || "";
-    els.fData.value = d.data || nowLocalInputValue();
-    ["fFrete","fDiesel","fPedagio","fBorracharia","fCaixinha","fOutros"].forEach((id) => els[id].value = d[id] || "");
-    els.fComissao.value = d.comissao || "";
-    currentExpenses = Array.isArray(d.despesasExtras) ? d.despesasExtras : [];
-    renderExpenseList();
-    updateSummary();
-  }
-
-  function applyUserToUI() {
-    const user = getUser();
-    const chip = document.getElementById("userChip");
-    if (user) {
-      chip.style.display = "flex";
-      document.getElementById("userChipPhone").textContent = formatPhone(user.phoneNumber || currentProfile?.phone || "");
-      document.getElementById("userChipRole").textContent = isManager() ? "GESTOR" : "MOTORISTA";
-      const pic = document.getElementById("userChipPic");
-      pic.style.display = "none";
-    } else chip.style.display = "none";
-  }
-
-  function setLoginStep(step) {
-    ["loginChoiceStep","phoneStep","codeStep","profileStep"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = id === step ? "block" : "none";
-    });
-    const title = document.getElementById("loginTitle");
-    const sub = document.getElementById("loginSubtitle");
-    if (step === "phoneStep") { title.textContent = "Insira o número do seu telefone"; sub.textContent = "Seu número será usado para acessar e recuperar seus dados."; }
-    else if (step === "codeStep") { title.textContent = "Código de confirmação"; sub.textContent = "Digite o código recebido por SMS."; }
-    else if (step === "profileStep") { title.textContent = "Complete seu cadastro"; sub.textContent = "Escolha como você usará o Sistema Perseguini."; }
-    else { title.textContent = "Sistema Perseguini"; sub.textContent = "Uma nova experiência de controlar suas viagens"; }
-  }
-
-  function openLogin() { document.getElementById("loginOverlay").classList.add("open"); }
-  function closeLogin() { document.getElementById("loginOverlay").classList.remove("open"); }
-  function showLogin() { openLogin(); }
-  function hideLogin() { closeLogin(); }
-
-  function ensureRecaptcha() {
-    if (recaptchaVerifier) return recaptchaVerifier;
-    const auth = initFirebase();
-    if (!auth || !window.firebase) return null;
-    try {
-      recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha-container", { size: "invisible" });
-      recaptchaVerifier.render().catch(() => {});
-    } catch (e) {
-      console.error("reCAPTCHA:", e);
-      recaptchaVerifier = null;
-    }
-    return recaptchaVerifier;
-  }
-
-  async function loadProfileForUser(fbUser, creating = false) {
-    const ref = getProfileDocRef(fbUser.uid);
-    let profile = null;
-    try {
-      const snap = await ref.get();
-      if (snap.exists) profile = snap.data();
-    } catch (e) { console.error("Erro ao carregar perfil:", e); }
-    if (profile) {
-      saveProfile(profile);
-      setUser({ uid: fbUser.uid, phoneNumber: fbUser.phoneNumber || profile.phone || "", provider: "phone" });
-      await syncUserData(true);
-      closeLogin();
-      applyUserToUI();
-      applyRoleUI();
-      restoreDraft();
-      renderInicio();
-      renderFrota();
-      toast(`Bem-vindo, ${(profile.name || "").split(" ")[0] || "de volta"}!`);
-      return true;
-    }
-    if (creating) {
-      let invitedName = "";
-      try {
-        if (fbUser.phoneNumber) {
-          const inv = await initFirestore().collection("motoristas_convites").doc(normalizePhone(fbUser.phoneNumber)).get();
-          if (inv.exists) invitedName = inv.data().name || "";
-        }
-      } catch (e) {}
-      document.getElementById("profileNameInput").value = invitedName;
-      selectedRole = "motorista";
-      document.querySelectorAll(".role-choice").forEach(b => b.classList.toggle("active", b.dataset.role === selectedRole));
-      setLoginStep("profileStep");
-      return false;
-    }
-    toast("Essa conta ainda não possui cadastro. Escolha 'Criar uma nova conta'.");
-    return false;
-  }
-
-  async function sendPhoneCode() {
-    const raw = normalizePhone(document.getElementById("phoneInput").value);
-    if (raw.length < 10 || raw.length > 11) { toast("Digite um celular brasileiro válido."); return; }
-    const auth = initFirebase();
-    const verifier = ensureRecaptcha();
-    if (!auth || !verifier) { toast("Não foi possível iniciar a confirmação do telefone."); return; }
-    const btn = document.getElementById("sendCodeBtn");
-    btn.disabled = true; btn.textContent = "ENVIANDO...";
-    try {
-      confirmationResult = await auth.signInWithPhoneNumber(toE164BR(raw), verifier);
-      document.getElementById("sentPhoneLabel").textContent = formatPhone(raw);
-      setLoginStep("codeStep");
-      document.getElementById("codeInput").focus();
-    } catch (e) {
-      console.error(e);
-      try { if (recaptchaVerifier) recaptchaVerifier.clear(); } catch (_) {}
-      recaptchaVerifier = null;
-      toast(e.code === "auth/invalid-phone-number" ? "Número de telefone inválido." : "Não foi possível enviar o SMS. Verifique o Firebase e tente novamente.");
-    } finally { btn.disabled = false; btn.textContent = "CONFIRMAR NÚMERO DE TELEFONE"; }
-  }
-
-  async function verifyPhoneCode() {
-    if (!confirmationResult) { toast("Solicite um novo código."); return; }
-    const code = normalizePhone(document.getElementById("codeInput").value);
-    if (code.length !== 6) { toast("Digite o código de 6 números."); return; }
-    const btn = document.getElementById("verifyCodeBtn"); btn.disabled = true; btn.textContent = "CONFIRMANDO...";
-    try {
-      const result = await confirmationResult.confirm(code);
-      const creating = loginMode === "create";
-      await loadProfileForUser(result.user, creating);
-    } catch (e) {
-      console.error(e);
-      toast(e.code === "auth/invalid-verification-code" ? "Código incorreto." : "Não foi possível confirmar o código.");
-    } finally { btn.disabled = false; btn.textContent = "CONFIRMAR CÓDIGO"; }
-  }
-
-  async function finishProfile() {
-    const user = firebaseAuth?.currentUser || getUser();
-    if (!user?.uid) { toast("Sessão expirada. Confirme o telefone novamente."); return; }
-    const name = document.getElementById("profileNameInput").value.trim();
-    if (!name) { toast("Informe o nome."); return; }
-    if (selectedRole === "gestor" && document.getElementById("managerCodeInput").value.trim() !== MANAGER_SETUP_CODE) {
-      toast("Código de gestor inválido."); return;
-    }
-    const profile = { uid: user.uid, phone: user.phoneNumber || "", name, role: selectedRole, assignedVehicleId: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    try {
-      await getProfileDocRef(user.uid).set(profile, { merge: true });
-      saveProfile(profile);
-      setUser({ uid: user.uid, phoneNumber: user.phoneNumber || profile.phone, provider: "phone" });
-      localStorage.removeItem(SKIP_LOGIN_KEY);
-      await syncUserData(true);
-      closeLogin(); applyUserToUI(); applyRoleUI(); renderInicio(); renderFrota(); restoreDraft();
-      toast("Cadastro concluído!");
-    } catch (e) { console.error(e); toast("Não foi possível salvar seu cadastro."); }
-  }
-
-  document.getElementById("createAccountBtn").addEventListener("click", () => {
-    if (!document.getElementById("termsCheck").checked) { toast("Marque a opção dos termos para continuar."); return; }
-    loginMode = "create"; setLoginStep("phoneStep");
-  });
-  document.getElementById("existingAccountBtn").addEventListener("click", () => {
-    if (!document.getElementById("termsCheck").checked) { toast("Marque a opção dos termos para continuar."); return; }
-    loginMode = "existing"; setLoginStep("phoneStep");
-  });
-  document.getElementById("backToChoiceBtn").addEventListener("click", () => setLoginStep("loginChoiceStep"));
-  document.getElementById("backToPhoneBtn").addEventListener("click", () => setLoginStep("phoneStep"));
-  document.getElementById("phoneInput").addEventListener("input", (e) => { e.target.value = formatPhone(e.target.value); });
-  document.getElementById("sendCodeBtn").addEventListener("click", sendPhoneCode);
-  document.getElementById("verifyCodeBtn").addEventListener("click", verifyPhoneCode);
-  document.getElementById("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") verifyPhoneCode(); });
-  document.querySelectorAll(".role-choice").forEach(btn => btn.addEventListener("click", () => {
-    selectedRole = btn.dataset.role;
-    document.querySelectorAll(".role-choice").forEach(b => b.classList.toggle("active", b === btn));
-    document.getElementById("managerCodeField").style.display = selectedRole === "gestor" ? "block" : "none";
-  }));
-  document.getElementById("finishProfileBtn").addEventListener("click", finishProfile);
-
   async function saveToCloud() {
-    if (!getUser()?.uid) { toast("Entre com seu número para sincronizar."); return; }
-    await syncUserData(true); toast("Dados sincronizados! ☁️"); updateCloudModalStatus();
+    const user = getUser();
+    if (!user || !user.email) {
+      toast("Entre com sua conta Google para salvar na nuvem.");
+      return;
+    }
+    const ref = cloudDocRef(user.email);
+    if (!ref) {
+      toast("Não foi possível conectar à nuvem. Verifique sua conexão.");
+      return;
+    }
+    setCloudButtonsLoading(true, "save");
+    try {
+      await ref.set({
+        email: normalizeEmail(user.email),
+        name: getName(),
+        trips: trips,
+        updatedAt: new Date().toISOString(),
+      });
+      setLastSync(user.email);
+      updateCloudModalStatus();
+      toast("Dados salvos na nuvem! ☁️");
+    } catch (e) {
+      console.error("Erro ao salvar na nuvem:", e);
+      toast("Não foi possível salvar na nuvem. Tente novamente.");
+    } finally {
+      setCloudButtonsLoading(false, "save");
+    }
   }
+
   async function restoreFromCloud() {
-    const ref = getDataDocRef();
-    if (!ref) { toast("Entre com seu número para restaurar os dados."); return; }
+    const user = getUser();
+    if (!user || !user.email) {
+      toast("Entre com sua conta Google para restaurar da nuvem.");
+      return;
+    }
+    const ref = cloudDocRef(user.email);
+    if (!ref) {
+      toast("Não foi possível conectar à nuvem. Verifique sua conexão.");
+      return;
+    }
+    if (!confirm("Isso vai substituir os dados salvos neste aparelho pelos dados da nuvem. Continuar?")) return;
+    setCloudButtonsLoading(true, "restore");
     try {
       const snap = await ref.get();
-      if (!snap.exists) { toast("Ainda não há dados salvos para este número."); return; }
+      if (!snap.exists) {
+        toast("Nenhum dado salvo na nuvem para este e-mail ainda.");
+        return;
+      }
       const data = snap.data();
-      trips = mergeTrips(trips, Array.isArray(data.trips) ? data.trips : []);
+      trips = Array.isArray(data.trips) ? data.trips : [];
       saveTrips(trips);
-      if (data.draft) saveDraft(data.draft, false);
-      renderInicio(); renderHistorico(); restoreDraft(); updateCloudModalStatus(); toast("Progresso restaurado! 🔄");
-    } catch (e) { console.error(e); toast("Não foi possível restaurar os dados."); }
+      if (data.name) setName(data.name);
+      setLastSync(user.email);
+      updateCloudModalStatus();
+      renderInicio();
+      renderHistorico();
+      toast("Dados restaurados da nuvem! 🔄");
+    } catch (e) {
+      console.error("Erro ao restaurar da nuvem:", e);
+      toast("Não foi possível restaurar da nuvem. Tente novamente.");
+    } finally {
+      setCloudButtonsLoading(false, "restore");
+    }
   }
+
+  function setCloudButtonsLoading(loading, which) {
+    const saveBtn = document.getElementById("btnCloudSave");
+    const restoreBtn = document.getElementById("btnCloudRestore");
+    if (saveBtn) saveBtn.disabled = loading;
+    if (restoreBtn) restoreBtn.disabled = loading;
+    if (which === "save" && saveBtn) saveBtn.textContent = loading ? "☁️ Salvando..." : "☁️ Salvar na nuvem";
+    if (which === "restore" && restoreBtn) restoreBtn.textContent = loading ? "🔄 Restaurando..." : "🔄 Restaurar da nuvem";
+  }
+
   function updateCloudModalStatus() {
-    const el = document.getElementById("cloudSyncStatus"); const u = getUser();
-    if (!el || !u?.uid) return; const last = getLastSync(u.uid); el.textContent = last ? `Última sincronização: ${fmtDate(last)}` : "Ainda não sincronizado.";
+    const user = getUser();
+    const statusEl = document.getElementById("cloudSyncStatus");
+    if (!statusEl) return;
+    if (!user || !user.email) {
+      statusEl.textContent = "";
+      return;
+    }
+    const last = getLastSync(user.email);
+    statusEl.textContent = last ? `Última sincronização: ${fmtDate(last)}` : "Ainda não sincronizado nesta conta.";
   }
-  function openCloudModal() { if (!getUser()?.uid) { toast("Entre primeiro com seu número."); return; } document.getElementById("cloudModalPhone").textContent = formatPhone(getUser().phoneNumber || currentProfile?.phone); updateCloudModalStatus(); document.getElementById("cloudModal").classList.add("open"); }
-  function closeCloudModal() { document.getElementById("cloudModal").classList.remove("open"); }
-  document.getElementById("userChipCloudBtn").addEventListener("click", openCloudModal);
+
+  const cloudModal = document.getElementById("cloudModal");
+  function openCloudModal() {
+    const user = getUser();
+    if (!user || !user.email) {
+      toast("Entre com sua conta Google para usar a nuvem.");
+      return;
+    }
+    document.getElementById("cloudModalEmail").textContent = user.email;
+    updateCloudModalStatus();
+    cloudModal.classList.add("open");
+  }
+  function closeCloudModal() { cloudModal.classList.remove("open"); }
+
+  const userChipCloudBtn = document.getElementById("userChipCloudBtn");
+  if (userChipCloudBtn) userChipCloudBtn.addEventListener("click", openCloudModal);
   document.getElementById("closeCloudModalBtn").addEventListener("click", closeCloudModal);
-  document.getElementById("cloudModal").addEventListener("click", e => { if (e.target.id === "cloudModal") closeCloudModal(); });
+  cloudModal.addEventListener("click", (e) => { if (e.target === cloudModal) closeCloudModal(); });
   document.getElementById("btnCloudSave").addEventListener("click", saveToCloud);
   document.getElementById("btnCloudRestore").addEventListener("click", restoreFromCloud);
 
-  document.getElementById("logoutMainBtn").addEventListener("click", async () => {
+  function setGoogleBtnLoading(loading) {
+    if (!googleLoginBtn) return;
+    googleLoginBtn.disabled = loading;
+    googleLoginBtn.querySelector(".g-icon").textContent = loading ? "…" : "G";
+  }
+
+  function onGoogleSignInSuccess(fbUser) {
+    setUser({
+      uid: fbUser.uid,
+      name: fbUser.displayName || "Motorista",
+      email: fbUser.email || "",
+      picture: fbUser.photoURL || "",
+      provider: "google",
+    });
+    setName(fbUser.displayName || "Motorista");
+    localStorage.removeItem(SKIP_LOGIN_KEY);
+    hideLogin();
+    applyUserToUI();
+    renderInicio();
+    toast(`Bem-vindo, ${(fbUser.displayName || "").split(" ")[0] || "de volta"}!`);
+  }
+
+  function onGoogleSignInError(e) {
+    if (e && e.code === "auth/popup-closed-by-user") {
+      // user cancelled, no need to show an error
+    } else if (e && e.code === "auth/unauthorized-domain") {
+      toast("Este domínio não está autorizado no Firebase (Authentication → Settings → Authorized domains).");
+    } else {
+      console.error("Erro no login com Google:", e);
+      toast("Não foi possível entrar com Google. Tente novamente.");
+    }
+  }
+
+  async function signInWithGoogle() {
+    const auth = initFirebase();
+    if (!auth) {
+      toast("Não foi possível iniciar o login com Google. Verifique sua conexão.");
+      return;
+    }
+    const provider = new firebase.auth.GoogleAuthProvider();
+    setGoogleBtnLoading(true);
+    try {
+      if (useRedirectFlow) {
+        // Page will navigate away and come back; result is picked up by
+        // getRedirectResult() below on next load.
+        await auth.signInWithRedirect(provider);
+        return;
+      }
+      const result = await auth.signInWithPopup(provider);
+      onGoogleSignInSuccess(result.user);
+    } catch (e) {
+      onGoogleSignInError(e);
+    } finally {
+      setGoogleBtnLoading(false);
+    }
+  }
+
+  // Handle the return trip from signInWithRedirect (iOS standalone PWA flow).
+  function checkRedirectResult() {
+    const auth = initFirebase();
+    if (!auth) return;
+    auth.getRedirectResult()
+      .then((result) => {
+        if (result && result.user) onGoogleSignInSuccess(result.user);
+      })
+      .catch(onGoogleSignInError);
+  }
+
+  if (googleLoginBtn) googleLoginBtn.addEventListener("click", signInWithGoogle);
+
+  document.getElementById("guestLoginBtn").addEventListener("click", () => {
+    localStorage.setItem(SKIP_LOGIN_KEY, "1");
+    hideLogin();
+  });
+
+  document.getElementById("logoutMainBtn").addEventListener("click", () => {
     if (!confirm("Sair e voltar para a tela de login?")) return;
-    try { if (firebaseAuth) await firebaseAuth.signOut(); } catch (e) {}
-    clearUser(); saveProfile(null); currentProfile = null; fleetVehicles = []; applyUserToUI(); showLogin(); setLoginStep("loginChoiceStep");
+    const auth = initFirebase();
+    const finishLogout = () => {
+      clearUser();
+      localStorage.removeItem(SKIP_LOGIN_KEY);
+      applyUserToUI();
+      showLogin();
+    };
+    if (auth) auth.signOut().then(finishLogout).catch(finishLogout);
+    else finishLogout();
   });
 
   function initLogin() {
-    initFirebase(); initFirestore();
-    const fbUser = firebaseAuth?.currentUser;
-    const saved = getUser();
-    if (fbUser && saved?.uid === fbUser.uid && getProfile()) {
-      closeLogin(); applyUserToUI(); applyRoleUI(); restoreDraft(); loadFleet(); return;
-    }
-    if (saved?.uid && getProfile()) {
-      closeLogin(); applyUserToUI(); applyRoleUI(); restoreDraft(); loadFleet();
-      const auth = initFirebase();
-      if (auth) auth.onAuthStateChanged(async (u) => { if (u && u.uid === saved.uid) await syncUserData(true); });
+    initFirebase();
+    checkRedirectResult();
+    const user = getUser();
+    const skipped = localStorage.getItem(SKIP_LOGIN_KEY);
+    applyUserToUI();
+    if (user || skipped) {
+      hideLogin();
       return;
     }
-    openLogin(); setLoginStep("loginChoiceStep");
+    showLogin();
   }
-
-  /* ---------------- Frota / Gestor / Motorista ---------------- */
-  function applyRoleUI() {
-    const role = getRole();
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      const tab = btn.dataset.tab;
-      let show = true;
-      if (role === 'gestor' && ['nova','historico','stats'].includes(tab)) show = false;
-      if (role !== 'gestor' && tab === 'stats') show = true;
-      btn.style.display = show ? 'flex' : 'none';
-    });
-    const add = document.getElementById('btnAddVehicle');
-    const addDriver = document.getElementById('btnAddDriver');
-    if (add) add.style.display = role === 'gestor' ? 'inline-flex' : 'none';
-    if (addDriver) addDriver.style.display = role === 'gestor' ? 'inline-flex' : 'none';
-    const sub = document.getElementById('fleetSubtitle');
-    if (sub) sub.textContent = role === 'gestor' ? 'Cadastre caminhões, motoristas e faça as designações.' : 'Veja somente o caminhão que está designado para você.';
-    const fleetTab = document.querySelector('.nav-btn[data-tab="frota"]');
-    if (fleetTab) fleetTab.style.display = 'flex';
-  }
-
-  function currentAssignedVehicle() {
-    const id = currentProfile?.assignedVehicleId;
-    return fleetVehicles.find(v => v.id === id) || (fleetVehicles.length === 1 && !isManager() ? fleetVehicles[0] : null);
-  }
-
-  function renderAssignedVehicleHome() {
-    const el = document.getElementById('assignedTruckHome');
-    if (!el) return;
-    if (isManager()) { el.style.display = 'none'; return; }
-    const v = currentAssignedVehicle();
-    if (!v) {
-      el.style.display = 'block';
-      el.innerHTML = `<div class="assigned-truck-empty"><span>🚛</span><div><b>Nenhum caminhão designado</b><small>Aguarde o gestor designar uma placa para você.</small></div></div>`;
-      return;
-    }
-    el.style.display = 'block';
-    const photo = v.photos?.[0] || '';
-    el.innerHTML = `<div class="assigned-truck-media">${photo ? `<img src="${photo}" alt="Caminhão">` : '<span>🚛</span>'}</div><div class="assigned-truck-info"><small>SEU CAMINHÃO</small><b>${escapeHtml(v.name || 'Caminhão')}</b><strong>${escapeHtml(v.plate || '')}</strong></div>`;
-  }
-
-  function renderTripVehicleCard() {
-    const el = document.getElementById('tripVehicleCard');
-    if (!el) return;
-    if (isManager()) { el.style.display = 'none'; return; }
-    const v = currentAssignedVehicle();
-    el.style.display = 'block';
-    if (!v) {
-      el.innerHTML = `<div class="assigned-trip-warning">⚠️ Você ainda não possui um caminhão designado pelo gestor. Não será possível salvar uma nova viagem.</div>`;
-      document.getElementById('btnSalvar').disabled = true;
-      return;
-    }
-    el.innerHTML = `<div class="assigned-trip-icon">🚛</div><div><small>PLACA DESIGNADA</small><b>${escapeHtml(v.plate)}</b><span>${escapeHtml(v.name || 'Caminhão')}</span></div><span class="assigned-check">✓</span>`;
-    document.getElementById('btnSalvar').disabled = false;
-  }
-
-  function renderFrota() {
-    const wrap = document.getElementById('fleetWrap');
-    if (!wrap) return;
-    applyRoleUI();
-    if (!fleetVehicles.length) {
-      wrap.innerHTML = `<div class="empty-state fleet-empty"><div class="emoji">🚛</div><div class="title">${isManager() ? 'Nenhum veículo cadastrado' : 'Nenhum caminhão designado'}</div><div class="desc">${isManager() ? 'Cadastre o primeiro caminhão e depois escolha o motorista.' : 'O gestor ainda não designou um caminhão para você.'}</div></div>`;
-      renderAssignedVehicleHome(); renderTripVehicleCard(); return;
-    }
-    wrap.innerHTML = fleetVehicles.map(v => {
-      const photo = v.photos?.[0] || '';
-      const driver = v.driverName ? `👤 ${escapeHtml(v.driverName)}` : 'Sem motorista designado';
-      return `<div class="fleet-card" data-id="${escapeHtml(v.id)}"><div class="fleet-photo">${photo ? `<img src="${photo}" alt="${escapeHtml(v.name || 'Caminhão')}">` : '<span>🚛</span>'}</div><div class="fleet-info"><div class="fleet-plate">${escapeHtml(v.plate || '')}</div><div class="fleet-name">${escapeHtml(v.name || 'Caminhão')}</div><div class="fleet-driver">${driver}</div></div>${isManager() ? `<div class="fleet-actions"><button type="button" data-action="edit" data-id="${escapeHtml(v.id)}">✏️</button><button type="button" data-action="delete" data-id="${escapeHtml(v.id)}">🗑️</button></div>` : ''}</div>`;
-    }).join('');
-    wrap.querySelectorAll('.fleet-card').forEach(card => card.addEventListener('click', e => {
-      const btn = e.target.closest('button'); if (!btn || !isManager()) return;
-      const id = btn.dataset.id;
-      if (btn.dataset.action === 'edit') openVehicleModal(id);
-      if (btn.dataset.action === 'delete') deleteVehicle(id);
-    }));
-    renderAssignedVehicleHome(); renderTripVehicleCard();
-  }
-
-  async function loadDrivers() {
-    const db = initFirestore();
-    if (!db) return [];
-    try {
-      const snap = await db.collection('usuarios').where('role', '==', 'motorista').get();
-      return snap.docs.map(d => d.data()).filter(p => p.uid);
-    } catch (e) { console.error('Erro ao carregar motoristas:', e); return []; }
-  }
-
-  async function loadFleet() {
-    const db = initFirestore(); const user = getUser();
-    if (!db || !user?.uid) { fleetVehicles = []; renderFrota(); return; }
-    try {
-      let snap;
-      if (isManager()) snap = await db.collection('frota').get();
-      else if (currentProfile?.assignedVehicleId) snap = await db.collection('frota').where(firebase.firestore.FieldPath.documentId(), '==', currentProfile.assignedVehicleId).get();
-      else snap = { docs: [] };
-      fleetVehicles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderFrota();
-    } catch (e) { console.error('Erro ao carregar frota:', e); toast('Não foi possível carregar a frota.'); }
-  }
-
-  function compressImage(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const max = 1000; const scale = Math.min(1, max / Math.max(img.width, img.height));
-          const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(img.width * scale)); canvas.height = Math.max(1, Math.round(img.height * scale));
-          const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.76));
-        };
-        img.onerror = reject; img.src = reader.result;
-      };
-      reader.onerror = reject; reader.readAsDataURL(file);
-    });
-  }
-
-  async function saveDriverInvite() {
-    if (!isManager()) return;
-    const db = initFirestore();
-    const name = document.getElementById('driverNameInput').value.trim();
-    const phone = normalizePhone(document.getElementById('driverPhoneInput').value);
-    if (!name) { toast('Informe o nome do motorista.'); return; }
-    if (phone.length < 10 || phone.length > 11) { toast('Informe um celular válido.'); return; }
-    try {
-      await db.collection('motoristas_convites').doc(phone).set({ name, phone: '+55' + phone, createdBy: getUser().uid, createdAt: new Date().toISOString() }, { merge: true });
-      closeDriverModal(); await loadFleet(); toast('Motorista cadastrado. Agora ele pode entrar com este número.');
-    } catch (e) { console.error(e); toast('Não foi possível cadastrar o motorista.'); }
-  }
-  function closeDriverModal() { document.getElementById('driverModal').classList.remove('open'); }
-  document.getElementById('btnAddDriver').addEventListener('click', () => document.getElementById('driverModal').classList.add('open'));
-  document.getElementById('closeDriverModalBtn').addEventListener('click', closeDriverModal);
-  document.getElementById('cancelDriverBtn').addEventListener('click', closeDriverModal);
-  document.getElementById('saveDriverBtn').addEventListener('click', saveDriverInvite);
-  document.getElementById('driverModal').addEventListener('click', e => { if (e.target.id === 'driverModal') closeDriverModal(); });
-  document.getElementById('driverPhoneInput').addEventListener('input', e => { e.target.value = formatPhone(e.target.value); });
-
-  async function openVehicleModal(id = null) {
-    if (!isManager()) return;
-    editingVehicleId = id;
-    const v = id ? fleetVehicles.find(x => x.id === id) : null;
-    document.getElementById('vehicleModalTitle').textContent = v ? 'Editar veículo' : 'Novo veículo';
-    document.getElementById('vehiclePlateInput').value = v?.plate || '';
-    document.getElementById('vehicleNameInput').value = v?.name || '';
-    document.getElementById('vehiclePhotosInput').value = '';
-    const preview = document.getElementById('vehiclePhotoPreview');
-    preview.innerHTML = (v?.photos || []).map(p => `<img src="${p}" alt="Foto do veículo">`).join('');
-    const select = document.getElementById('vehicleDriverSelect');
-    select.innerHTML = '<option value="">Sem motorista designado</option>';
-    const drivers = await loadDrivers();
-    drivers.forEach(d => { const opt = document.createElement('option'); opt.value = d.uid; opt.textContent = `${d.name || 'Motorista'} — ${formatPhone(d.phone || '')}`; opt.dataset.name = d.name || 'Motorista'; select.appendChild(opt); });
-    if (v?.driverId) select.value = v.driverId;
-    document.getElementById('vehicleModal').classList.add('open');
-  }
-  function closeVehicleModal() { document.getElementById('vehicleModal').classList.remove('open'); editingVehicleId = null; }
-
-  document.getElementById('vehiclePhotosInput').addEventListener('change', async e => {
-    const preview = document.getElementById('vehiclePhotoPreview'); preview.innerHTML = '';
-    const files = [...e.target.files].slice(0, 3);
-    for (const file of files) { try { const src = await compressImage(file); const img = document.createElement('img'); img.src = src; preview.appendChild(img); } catch (_) {} }
-  });
-
-  async function saveVehicle() {
-    if (!isManager()) return;
-    const db = initFirestore(); if (!db) { toast('Nuvem indisponível.'); return; }
-    const plate = document.getElementById('vehiclePlateInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const name = document.getElementById('vehicleNameInput').value.trim();
-    const select = document.getElementById('vehicleDriverSelect'); const driverId = select.value; const driverName = select.selectedOptions[0]?.dataset.name || '';
-    if (plate.length < 7) { toast('Informe uma placa válida.'); return; }
-    if (!name) { toast('Informe o nome/modelo do caminhão.'); return; }
-    const existing = editingVehicleId ? fleetVehicles.find(v => v.id === editingVehicleId) : null;
-    let photos = existing?.photos || [];
-    const files = [...document.getElementById('vehiclePhotosInput').files].slice(0, 3);
-    if (files.length) photos = await Promise.all(files.map(compressImage));
-    const vehicle = { plate, name, photos, driverId: driverId || '', driverName: driverName || '', updatedAt: new Date().toISOString(), createdBy: getUser().uid };
-    try {
-      const ref = editingVehicleId ? db.collection('frota').doc(editingVehicleId) : db.collection('frota').doc();
-      const old = existing;
-      await ref.set(vehicle, { merge: true });
-      if (old?.driverId && old.driverId !== driverId) await getProfileDocRef(old.driverId).set({ assignedVehicleId: '', updatedAt: new Date().toISOString() }, { merge: true });
-      if (driverId) await getProfileDocRef(driverId).set({ assignedVehicleId: ref.id, updatedAt: new Date().toISOString() }, { merge: true });
-      closeVehicleModal(); await loadFleet(); toast('Veículo salvo e designação atualizada!');
-    } catch (e) { console.error(e); toast('Não foi possível salvar o veículo. Verifique as regras do Firestore.'); }
-  }
-
-  async function deleteVehicle(id) {
-    if (!isManager() || !confirm('Excluir este veículo? O histórico das viagens não será apagado.')) return;
-    const db = initFirestore(); const v = fleetVehicles.find(x => x.id === id);
-    try {
-      await db.collection('frota').doc(id).delete();
-      if (v?.driverId) await getProfileDocRef(v.driverId).set({ assignedVehicleId: '', updatedAt: new Date().toISOString() }, { merge: true });
-      await loadFleet(); toast('Veículo excluído.');
-    } catch (e) { console.error(e); toast('Não foi possível excluir o veículo.'); }
-  }
-
-  document.getElementById('btnAddVehicle').addEventListener('click', () => openVehicleModal());
-  document.getElementById('closeVehicleModalBtn').addEventListener('click', closeVehicleModal);
-  document.getElementById('cancelVehicleBtn').addEventListener('click', closeVehicleModal);
-  document.getElementById('saveVehicleBtn').addEventListener('click', saveVehicle);
-  document.getElementById('vehicleModal').addEventListener('click', e => { if (e.target.id === 'vehicleModal') closeVehicleModal(); });
 
   /* ---------------- Theme toggle ---------------- */
   function getTheme() { return localStorage.getItem(THEME_KEY) || "light"; }
@@ -991,7 +710,6 @@
       inp.addEventListener("input", (e) => {
         const exp = currentExpenses.find((x) => x.id === e.target.dataset.id);
         if (exp) exp.desc = e.target.value;
-        saveDraft(buildCurrentDraft());
       });
     });
     wrap.querySelectorAll('input[data-field="valor"]').forEach((inp) => {
@@ -999,14 +717,12 @@
         const exp = currentExpenses.find((x) => x.id === inp.dataset.id);
         if (exp) exp.valor = inp.value;
         updateSummary();
-        saveDraft(buildCurrentDraft());
       });
     });
     wrap.querySelectorAll(".remove-expense").forEach((btn) => {
       btn.addEventListener("click", () => {
         currentExpenses = currentExpenses.filter((x) => x.id !== btn.dataset.id);
         renderExpenseList();
-        saveDraft(buildCurrentDraft());
         updateSummary();
       });
     });
@@ -1015,7 +731,6 @@
   document.getElementById("btnAddExpense").addEventListener("click", () => {
     currentExpenses.push({ id: uid(), desc: "", valor: "" });
     renderExpenseList();
-    saveDraft(buildCurrentDraft());
   });
 
   function nowLocalInputValue() {
@@ -1033,7 +748,6 @@
     currentExpenses = [];
     renderExpenseList();
     updateSummary();
-    renderTripVehicleCard();
   }
 
   function updateSummary() {
@@ -1060,9 +774,6 @@
     attachMoneyMask(els[id], updateSummary)
   );
   attachPercentMask(els.fComissao, updateSummary);
-
-  const draftInputs = formIds.map(id => els[id]).filter(Boolean);
-  draftInputs.forEach(input => input.addEventListener("input", () => saveDraft(buildCurrentDraft())));
 
   document.getElementById("btnLimpar").addEventListener("click", () => {
     if (confirm("Limpar todos os campos?")) resetForm();
@@ -1096,21 +807,9 @@
         .filter((e) => e.desc.trim() || toNumber(e.valor))
         .map((e) => ({ id: e.id, desc: e.desc.trim(), valor: toNumber(e.valor) })),
       comissaoPaga: false,
-      updatedAt: new Date().toISOString(),
     };
-    if (!isManager()) {
-      const assigned = currentAssignedVehicle();
-      if (!assigned) { toast("Você precisa ter um caminhão designado pelo gestor."); return; }
-      t.vehicleId = assigned.id;
-      t.plate = assigned.plate;
-      t.vehicleName = assigned.name;
-      t.driverId = getUser()?.uid || "";
-      t.driverName = currentProfile?.name || getName();
-    }
     trips.push(t);
     saveTrips(trips);
-    clearDraft();
-    syncUserData(true).catch(() => {});
     toast("Viagem salva com sucesso!");
     resetForm();
     goTo("historico");
@@ -1342,7 +1041,6 @@
     if (!confirm("Excluir esta viagem? Essa ação não pode ser desfeita.")) return;
     trips = trips.filter((t) => t.id !== currentModalTripId);
     saveTrips(trips);
-    syncUserData(true).catch(() => {});
     closeModal();
     renderHistorico();
     renderInicio();
