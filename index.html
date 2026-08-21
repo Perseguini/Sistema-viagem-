@@ -16,9 +16,86 @@
 <link rel="stylesheet" href="style.css">
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<style>
+  /* ===== Perseguini: splash de entrada + loader do canto ===== */
+  .pgn-splash{
+    position:fixed; inset:0; z-index:99999;
+    background:#0F1229;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    transition:opacity .5s ease, visibility .5s ease;
+  }
+  .pgn-splash.pgn-hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  .pgn-splash-inner{
+    position:relative; width:100%; max-width:480px; padding:0 32px;
+  }
+  .pgn-splash-logo{
+    width:100%; height:auto;
+    transform:translateX(-160%);
+    animation:pgnDriveIn 1.5s cubic-bezier(.2,.85,.25,1) forwards;
+    filter:drop-shadow(0 10px 24px rgba(0,0,0,.55));
+  }
+  .pgn-splash-road{
+    position:absolute; left:6%; right:6%; bottom:-6px; height:3px;
+    border-radius:2px;
+    background:linear-gradient(90deg, transparent, rgba(120,190,255,.55), transparent);
+    background-size:200% 100%;
+    opacity:0;
+    animation:pgnRoadFade .4s ease .95s forwards, pgnRoadMove 1.1s linear infinite;
+  }
+  .pgn-splash-tagline{
+    text-align:center; margin-top:18px;
+    color:#9db4e8; letter-spacing:.14em; font-size:12px; font-weight:600;
+    text-transform:uppercase; opacity:0;
+    animation:pgnFadeUp .6s ease 1.1s forwards;
+  }
+  @keyframes pgnDriveIn{
+    0%{ transform:translateX(-160%) scale(.9); }
+    65%{ transform:translateX(6%) scale(1.03); }
+    82%{ transform:translateX(-2%) scale(1); }
+    100%{ transform:translateX(0) scale(1); }
+  }
+  @keyframes pgnRoadFade{ to{ opacity:1; } }
+  @keyframes pgnRoadMove{ from{ background-position:0 0; } to{ background-position:-200% 0; } }
+  @keyframes pgnFadeUp{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+
+  .pgn-corner-loader{
+    position:fixed; right:14px; bottom:14px; width:42px; height:42px;
+    border-radius:50%; background:#0F1229;
+    box-shadow:0 4px 16px rgba(0,0,0,.45);
+    display:flex; align-items:center; justify-content:center;
+    z-index:9998; opacity:0; pointer-events:none;
+    transition:opacity .3s ease;
+  }
+  .pgn-corner-loader.pgn-active{ opacity:1; }
+  .pgn-corner-loader-img{
+    width:26px; height:26px;
+    animation:pgnSpin 1s linear infinite;
+  }
+  @keyframes pgnSpin{ from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
+
+  @media (prefers-reduced-motion: reduce){
+    .pgn-splash-logo, .pgn-splash-road, .pgn-splash-tagline, .pgn-corner-loader-img{
+      animation:none !important; transform:none !important; opacity:1 !important;
+    }
+  }
+</style>
 </head>
 <body>
+<!-- ===== SPLASH DE ENTRADA ===== -->
+<div id="pgnSplash" class="pgn-splash">
+  <div class="pgn-splash-inner">
+    <img src="icons/splash-logo.png" alt="Perseguini" class="pgn-splash-logo">
+    <div class="pgn-splash-road"></div>
+    <p class="pgn-splash-tagline">Controle de viagens e fretes</p>
+  </div>
+</div>
+
+<!-- ===== LOADER PEQUENO NO CANTO ===== -->
+<div id="pgnCornerLoader" class="pgn-corner-loader" aria-hidden="true">
+  <img src="icons/icon-192.png" alt="" class="pgn-corner-loader-img">
+</div>
+
 <div id="loginOverlay" class="login-overlay">
 <div class="login-card">
 <div class="login-badge">🚛</div>
@@ -32,7 +109,6 @@
 <p class="login-note">Seus dados ficam salvos só neste aparelho, com ou sem login.</p>
 </div>
 </div>
-
 <div id="app">
 <!-- ===== TOPBAR ===== -->
 <div class="topbar" id="topbar">
@@ -66,13 +142,10 @@
 </p>
 <p class="sub">Bem-vindo ao seu sistema de controle de viagens e fretes.</p>
 </div>
-
 <div class="user-chip" id="userChip" style="display:none;">
 <img id="userChipPic" class="user-chip-pic" alt="">
 <span id="userChipEmail" class="user-chip-email"></span>
-<button class="user-chip-cloud" id="userChipCloudBtn" title="Salvar na nuvem">☁️</button>
 </div>
-
 <div class="stat-row single">
 <div class="stat-card blue">
 <div class="icon">🧾</div>
@@ -80,7 +153,6 @@
 <div class="label">viagens realizadas</div>
 </div>
 </div>
-
 <div class="install-card" id="installCard" style="display:none;">
 <div class="ic">📲</div>
 <div class="txt">
@@ -89,13 +161,11 @@
 </div>
 <button id="installBtn">Instalar</button>
 </div>
-
 <div class="section-head">
 <h3>Última viagem</h3>
 <span class="link" data-goto="historico">Ver todas</span>
 </div>
 <div id="lastTripWrap"></div>
-
 <div class="update-check">
 <button class="update-link" id="checkUpdateBtn">🔄 Verificar atualizações</button>
 <p class="update-version" id="appVersionLabel"></p>
@@ -123,13 +193,7 @@
 <label for="fData">Data da viagem</label>
 <input type="datetime-local" id="fData">
 </div>
-<div class="field" id="fCaminhaoWrap">
-<label for="fCaminhao">Caminhão</label>
-<select id="fCaminhao"></select>
-<p class="fc-hint" id="fCaminhaoHint" style="display:none;margin-top:6px;"></p>
 </div>
-</div>
-
 <div class="form-card">
 <p class="fc-title">Valores</p>
 <div class="field">
@@ -161,7 +225,6 @@
 <input inputmode="decimal" id="fComissao" placeholder="0">
 </div>
 </div>
-
 <div class="form-card">
 <div class="fc-title-row">
 <p class="fc-title" style="margin:0;">Despesas do trajeto</p>
@@ -170,7 +233,6 @@
 <p class="fc-hint">Lance gastos extras conforme eles acontecem durante a viagem.</p>
 <div id="expenseListWrap"></div>
 </div>
-
 <div class="summary-box">
 <p class="fc-title">Resumo da viagem</p>
 <div class="sum-row"><span>Total de gastos</span><span id="sumGastos">R$ 0,00</span></div>
@@ -180,7 +242,6 @@
 <span class="val" id="sumComissao">R$ 0,00</span>
 </div>
 </div>
-
 <div class="btn-row">
 <button class="btn btn-outline" id="btnLimpar">🗑️ Limpar</button>
 <button class="btn btn-primary" id="btnSalvar">💾 Salvar viagem</button>
@@ -196,9 +257,6 @@
 <div class="selector-row">
 <select id="selYear"></select>
 <select id="selMonth"></select>
-</div>
-<div class="selector-row" style="margin-top:10px;">
-<select id="selPlaca"></select>
 </div>
 </div>
 <div id="monthsWrap"></div>
@@ -219,11 +277,7 @@
 <div class="selector-row" id="statsMonthRow" style="margin-top:10px;">
 <select id="statsMonth"></select>
 </div>
-<div class="selector-row" style="margin-top:10px;">
-<select id="statsPlaca"></select>
 </div>
-</div>
-
 <div class="stats-cards">
 <div class="stats-card">
 <div class="sc-label">Faturamento (frete)</div>
@@ -250,62 +304,16 @@
 <div class="sc-value" id="statTicketMedio">R$ 0,00</div>
 </div>
 </div>
-
 <div class="section-head">
 <h3>Líquido por mês</h3>
 </div>
 <div class="chart-card">
 <canvas id="statsChart" width="700" height="280"></canvas>
 </div>
-
 <div class="section-head">
 <h3>Despesas por categoria</h3>
 </div>
 <div class="breakdown-card" id="breakdownWrap"></div>
-
-<div class="btn-row" style="margin-top:16px;">
-<button class="btn btn-primary" id="btnShareStats">📤 Compartilhar resultado</button>
-</div>
-</section>
-
-<!-- ===== SCREEN: FROTA ===== -->
-<section class="screen" id="screen-frota">
-<div class="form-wrap">
-
-<div class="form-card" id="frotaFormCard">
-<div class="fc-title-row">
-<p class="fc-title" style="margin:0;" id="frotaFormTitle">Adicionar caminhão</p>
-</div>
-<p class="fc-hint">Cadastre os caminhões da frota com placa e motorista responsável.</p>
-<div class="field">
-<label for="fFrotaPlaca">Placa</label>
-<input type="text" id="fFrotaPlaca" placeholder="Ex: ABC1D23" autocomplete="off" maxlength="8" style="text-transform:uppercase;">
-</div>
-<div class="field">
-<label for="fFrotaMotorista">Motorista</label>
-<input type="text" id="fFrotaMotorista" placeholder="Nome do motorista" autocomplete="off">
-</div>
-<div class="field">
-<label for="fFrotaModelo">Modelo / observação (opcional)</label>
-<input type="text" id="fFrotaModelo" placeholder="Ex: Scania R450, Truck 6x2..." autocomplete="off">
-</div>
-<div class="btn-row">
-<button class="btn btn-outline" id="btnFrotaCancelEdit" type="button" style="display:none;">Cancelar</button>
-<button class="btn btn-primary" id="btnFrotaSalvar" type="button">💾 Salvar caminhão</button>
-</div>
-</div>
-
-<div class="section-head">
-<h3>Caminhões cadastrados</h3>
-</div>
-<div id="frotaListWrap"></div>
-
-<div class="section-head" id="usuariosSectionHead" style="display:none;">
-<h3>E-mails e permissões</h3>
-<span class="link" id="btnOpenUsuarios">Gerenciar</span>
-</div>
-
-</div>
 </section>
 
 <!-- ===== BOTTOM NAV ===== -->
@@ -321,10 +329,6 @@
 <button class="nav-btn" data-tab="historico">
 <span class="nb-icon">📋</span>
 <span class="nb-label">Histórico</span>
-</button>
-<button class="nav-btn" data-tab="frota">
-<span class="nb-icon">🚚</span>
-<span class="nb-label">Frota</span>
 </button>
 <button class="nav-btn" data-tab="stats">
 <span class="nb-icon">📊</span>
@@ -377,108 +381,30 @@
 </div>
 </div>
 </div>
-
-<!-- ===== FROTA: DELETE CONFIRM MODAL ===== -->
-<div class="modal-overlay" id="frotaDeleteModal">
-<div class="modal-sheet small">
-<div class="sheet-handle"></div>
-<div class="sheet-header">
-<h3>Excluir caminhão</h3>
-<button class="close-btn" id="closeFrotaDeleteModalBtn">✕</button>
-</div>
-<div class="name-modal-body">
-<p class="fc-hint" id="frotaDeleteText">Tem certeza que deseja excluir este caminhão da frota?</p>
-<div class="btn-row" style="margin-top:16px;">
-<button class="btn btn-outline" id="cancelFrotaDeleteBtn">Cancelar</button>
-<button class="btn btn-primary" id="confirmFrotaDeleteBtn">🗑️ Excluir</button>
-</div>
-</div>
-</div>
-</div>
-
-<!-- ===== USUÁRIOS / PERMISSÕES MODAL ===== -->
-<div class="modal-overlay" id="usuariosModal">
-<div class="modal-sheet">
-<div class="sheet-handle"></div>
-<div class="sheet-header">
-<h3>👤 E-mails e permissões</h3>
-<button class="close-btn" id="closeUsuariosModalBtn">✕</button>
-</div>
-<div class="name-modal-body">
-<p class="fc-hint">Cadastre os e-mails que podem acessar o sistema, a permissão de cada um e o caminhão vinculado. E-mails não cadastrados aqui entram como Motorista, com acesso restrito. O WhatsApp é usado para identificar o motorista quando ele manda uma viagem por mensagem.</p>
-
-<div class="form-card" id="usuarioFormCard" style="margin:0 0 14px;">
-<p class="fc-title" style="margin:0 0 10px;" id="usuarioFormTitle">Adicionar e-mail</p>
-<div class="field">
-<label for="fUsuarioEmail">E-mail</label>
-<input type="email" id="fUsuarioEmail" placeholder="nome@exemplo.com" autocomplete="off">
-</div>
-<div class="field">
-<label for="fUsuarioTelefone">WhatsApp (opcional)</label>
-<input type="tel" id="fUsuarioTelefone" placeholder="11999998888 (DDI + DDD + número)" autocomplete="off" inputmode="numeric">
-</div>
-<div class="field">
-<label for="fUsuarioPermissao">Permissão</label>
-<select id="fUsuarioPermissao">
-<option value="gestor">Gestor (acesso total)</option>
-<option value="motorista">Motorista (acesso restrito)</option>
-</select>
-</div>
-<div class="field">
-<label for="fUsuarioCaminhao">Caminhão vinculado</label>
-<select id="fUsuarioCaminhao"></select>
-</div>
-<div class="btn-row">
-<button class="btn btn-outline" id="btnUsuarioCancelEdit" type="button" style="display:none;">Cancelar</button>
-<button class="btn btn-primary" id="btnUsuarioSalvar" type="button">💾 Salvar e-mail</button>
-</div>
-</div>
-
-<div id="usuariosListWrap"></div>
-</div>
-</div>
-</div>
-
-<!-- ===== USUÁRIOS: DELETE CONFIRM MODAL ===== -->
-<div class="modal-overlay" id="usuarioDeleteModal">
-<div class="modal-sheet small">
-<div class="sheet-handle"></div>
-<div class="sheet-header">
-<h3>Excluir e-mail</h3>
-<button class="close-btn" id="closeUsuarioDeleteModalBtn">✕</button>
-</div>
-<div class="name-modal-body">
-<p class="fc-hint" id="usuarioDeleteText">Tem certeza que deseja excluir este e-mail da lista de permissões?</p>
-<div class="btn-row" style="margin-top:16px;">
-<button class="btn btn-outline" id="cancelUsuarioDeleteBtn">Cancelar</button>
-<button class="btn btn-primary" id="confirmUsuarioDeleteBtn">🗑️ Excluir</button>
-</div>
-</div>
-</div>
-</div>
-
-<!-- ===== CLOUD SYNC MODAL ===== -->
-<div class="modal-overlay" id="cloudModal">
-<div class="modal-sheet small">
-<div class="sheet-handle"></div>
-<div class="sheet-header">
-<h3>☁️ Dados na nuvem</h3>
-<button class="close-btn" id="closeCloudModalBtn">✕</button>
-</div>
-<div class="name-modal-body">
-<p class="fc-hint">Seus dados ficam salvos na nuvem vinculados ao e-mail <strong id="cloudModalEmail"></strong>. Cada e-mail tem seus próprios dados, separados dos demais.</p>
-<p class="update-version" id="cloudSyncStatus"></p>
-<div class="btn-row" style="margin-top:16px;">
-<button class="btn btn-outline" id="btnCloudRestore">🔄 Restaurar da nuvem</button>
-<button class="btn btn-primary" id="btnCloudSave">☁️ Salvar na nuvem</button>
-</div>
-</div>
-</div>
-</div>
-
 </div>
 
 <canvas id="renderCanvas" style="display:none;"></canvas>
 <script src="app.js"></script>
+<script>
+(function(){
+  var splash = document.getElementById('pgnSplash');
+  var corner = document.getElementById('pgnCornerLoader');
+
+  // Funções globais para o app.js poder acionar o loader do canto
+  // em operações futuras (ex: salvar/restaurar da nuvem).
+  window.pgnShowLoader = function(){ if(corner) corner.classList.add('pgn-active'); };
+  window.pgnHideLoader = function(){ if(corner) corner.classList.remove('pgn-active'); };
+
+  window.pgnShowLoader();
+
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      if(splash) splash.classList.add('pgn-hide');
+      window.pgnHideLoader();
+      setTimeout(function(){ if(splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 600);
+    }, 1300);
+  });
+})();
+</script>
 </body>
 </html>
