@@ -61,6 +61,7 @@
 
   function saveFrota(list) {
     localStorage.setItem(FROTA_KEY, JSON.stringify(list));
+    syncUsuariosFrotaToCloud();
   }
 
   function loadUsuarios() {
@@ -74,6 +75,7 @@
 
   function saveUsuarios(list) {
     localStorage.setItem(USUARIOS_KEY, JSON.stringify(list));
+    syncUsuariosFrotaToCloud();
   }
 
   // ---- Permissões por e-mail ----
@@ -541,6 +543,7 @@
 
   const usuariosModal = document.getElementById("usuariosModal");
   const usuarioEmailInput = document.getElementById("fUsuarioEmail");
+  const usuarioTelefoneInput = document.getElementById("fUsuarioTelefone");
   const usuarioPermissaoSelect = document.getElementById("fUsuarioPermissao");
   const usuarioCaminhaoSelect = document.getElementById("fUsuarioCaminhao");
   const usuarioFormTitle = document.getElementById("usuarioFormTitle");
@@ -596,6 +599,7 @@
           <div class="meta">
             <span class="perm-badge ${u.permissao === "gestor" ? "gestor" : "motorista"}">${u.permissao === "gestor" ? "Gestor" : "Motorista"}</span>
             ${caminhao ? `<span class="caminhao-vinc">🚛 ${escapeHtml(caminhao.placa || "")}</span>` : ""}
+            ${u.telefone ? `<span class="caminhao-vinc">📱 ${escapeHtml(u.telefone)}</span>` : ""}
           </div>
         </div>
       </div>
@@ -610,6 +614,7 @@
 
   function clearUsuarioForm() {
     usuarioEmailInput.value = "";
+    if (usuarioTelefoneInput) usuarioTelefoneInput.value = "";
     usuarioPermissaoSelect.value = "motorista";
     usuarioCaminhaoSelect.value = "";
     editingUsuarioId = null;
@@ -623,6 +628,7 @@
     if (!u) return;
     editingUsuarioId = id;
     usuarioEmailInput.value = u.email || "";
+    if (usuarioTelefoneInput) usuarioTelefoneInput.value = u.telefone || "";
     usuarioPermissaoSelect.value = u.permissao === "gestor" ? "gestor" : "motorista";
     usuarioCaminhaoSelect.value = u.caminhaoId || "";
     usuarioFormTitle.textContent = "Editar e-mail";
@@ -635,6 +641,7 @@
 
   btnUsuarioSalvar.addEventListener("click", () => {
     const email = normalizeEmail(usuarioEmailInput.value);
+    const telefone = usuarioTelefoneInput ? normalizePhone(usuarioTelefoneInput.value) : "";
     const permissao = usuarioPermissaoSelect.value === "gestor" ? "gestor" : "motorista";
     const caminhaoId = usuarioCaminhaoSelect.value || "";
 
@@ -648,17 +655,25 @@
       toast("Esse e-mail já está cadastrado.");
       return;
     }
+    if (telefone) {
+      const telefoneDuplicado = usuarios.find((u) => normalizePhone(u.telefone) === telefone && u.id !== editingUsuarioId);
+      if (telefoneDuplicado) {
+        toast("Esse telefone já está vinculado a outro e-mail.");
+        return;
+      }
+    }
 
     if (editingUsuarioId) {
       const u = usuarios.find((x) => x.id === editingUsuarioId);
       if (u) {
         u.email = email;
+        u.telefone = telefone;
         u.permissao = permissao;
         u.caminhaoId = caminhaoId;
       }
       toast("E-mail atualizado!");
     } else {
-      usuarios.push({ id: usuarioUid(), email, permissao, caminhaoId });
+      usuarios.push({ id: usuarioUid(), email, telefone, permissao, caminhaoId });
       toast("E-mail cadastrado!");
     }
     saveUsuarios(usuarios);
@@ -826,11 +841,49 @@
     return String(email || "").trim().toLowerCase();
   }
 
+  // Deixa só dígitos, no mesmo padrão que a WhatsApp Cloud API manda o
+  // número de quem enviou a mensagem (com DDI, sem +, espaços ou traços).
+  // Ex.: "+55 (11) 99999-8888" -> "5511999998888"
+  function normalizePhone(phone) {
+    return String(phone || "").replace(/\D/g, "");
+  }
+
   function cloudDocRef(email) {
     const db = initFirestore();
     const key = normalizeEmail(email);
     if (!db || !key) return null;
     return db.collection("usuarios_dados").doc(key);
+  }
+
+  // Documento único e global (não por e-mail) com a lista de permissões
+  // (usuarios, já com telefone) e a frota. É lido pela Cloud Function do
+  // WhatsApp no servidor, que não tem acesso ao localStorage de nenhum
+  // aparelho. Sincroniza sozinho toda vez que o gestor salva um e-mail ou
+  // um caminhão — não depende do botão manual "Salvar na nuvem".
+  function globalConfigDocRef() {
+    const db = initFirestore();
+    if (!db) return null;
+    return db.collection("config_frota").doc("global");
+  }
+
+  let syncUsuariosFrotaTimer = null;
+  function syncUsuariosFrotaToCloud() {
+    // Debounce simples: evita mandar uma escrita pra cada tecla/alteração
+    // rápida em sequência.
+    clearTimeout(syncUsuariosFrotaTimer);
+    syncUsuariosFrotaTimer = setTimeout(async () => {
+      const ref = globalConfigDocRef();
+      if (!ref) return; // sem Firebase/offline: fica só local, tenta de novo na próxima alteração
+      try {
+        await ref.set({
+          usuarios: usuarios,
+          frota: frota,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("Erro ao sincronizar usuários/frota na nuvem:", e);
+      }
+    }, 800);
   }
 
   function getLastSync(email) {
@@ -978,6 +1031,7 @@
     renderFrota();
     renderNovaCaminhaoSelect();
     toast(`Bem-vindo, ${(fbUser.displayName || "").split(" ")[0] || "de volta"}!`);
+    startAutoMergeTrips();
   }
 
   function onGoogleSignInError(e) {
@@ -1039,6 +1093,7 @@
     const finishLogout = () => {
       clearUser();
       localStorage.removeItem(SKIP_LOGIN_KEY);
+      if (autoMergeInterval) { clearInterval(autoMergeInterval); autoMergeInterval = null; }
       applyUserToUI();
       renderFrota();
       renderNovaCaminhaoSelect();
@@ -1046,6 +1101,56 @@
     };
     if (auth) auth.signOut().then(finishLogout).catch(finishLogout);
     else finishLogout();
+  });
+
+  // Mescla no aparelho as viagens que estão na nuvem (por exemplo, lançadas
+  // pelo motorista via WhatsApp) e que ainda não existem localmente — sem
+  // apagar nada que já esteja no aparelho e sem precisar apertar botão.
+  // Roda sozinho ao abrir o app, ao logar e periodicamente enquanto o app
+  // fica aberto.
+  async function mergeTripsFromCloud(silent) {
+    const user = getUser();
+    if (!user || !user.email) return;
+    const ref = cloudDocRef(user.email);
+    if (!ref) return;
+    try {
+      const snap = await ref.get();
+      if (!snap.exists) return;
+      const data = snap.data();
+      const cloudTrips = Array.isArray(data.trips) ? data.trips : [];
+      if (!cloudTrips.length) return;
+
+      const idsLocais = new Set(trips.map((t) => t.id));
+      const novas = cloudTrips.filter((t) => t && t.id && !idsLocais.has(t.id));
+      if (!novas.length) return;
+
+      trips = trips.concat(novas);
+      saveTrips(trips);
+      setLastSync(user.email);
+      renderInicio();
+      renderHistorico();
+      if (!silent) updateCloudModalStatus();
+      toast(
+        novas.length === 1
+          ? "1 viagem nova chegou pelo WhatsApp! 📲"
+          : `${novas.length} viagens novas chegaram pelo WhatsApp! 📲`
+      );
+    } catch (e) {
+      console.error("Erro ao buscar viagens novas da nuvem:", e);
+    }
+  }
+
+  let autoMergeInterval = null;
+  function startAutoMergeTrips() {
+    mergeTripsFromCloud(true);
+    if (autoMergeInterval) clearInterval(autoMergeInterval);
+    // A cada 60s enquanto o app estiver aberto e em primeiro plano.
+    autoMergeInterval = setInterval(() => {
+      if (document.visibilityState === "visible") mergeTripsFromCloud(true);
+    }, 60000);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") mergeTripsFromCloud(true);
   });
 
   function initLogin() {
@@ -1056,6 +1161,7 @@
     applyUserToUI();
     if (user || skipped) {
       hideLogin();
+      if (user) startAutoMergeTrips();
       return;
     }
     showLogin();

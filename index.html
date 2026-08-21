@@ -405,13 +405,17 @@
 <button class="close-btn" id="closeUsuariosModalBtn">✕</button>
 </div>
 <div class="name-modal-body">
-<p class="fc-hint">Cadastre os e-mails que podem acessar o sistema, a permissão de cada um e o caminhão vinculado. E-mails não cadastrados aqui entram como Motorista, com acesso restrito.</p>
+<p class="fc-hint">Cadastre os e-mails que podem acessar o sistema, a permissão de cada um e o caminhão vinculado. E-mails não cadastrados aqui entram como Motorista, com acesso restrito. O WhatsApp é usado para identificar o motorista quando ele manda uma viagem por mensagem.</p>
 
 <div class="form-card" id="usuarioFormCard" style="margin:0 0 14px;">
 <p class="fc-title" style="margin:0 0 10px;" id="usuarioFormTitle">Adicionar e-mail</p>
 <div class="field">
 <label for="fUsuarioEmail">E-mail</label>
 <input type="email" id="fUsuarioEmail" placeholder="nome@exemplo.com" autocomplete="off">
+</div>
+<div class="field">
+<label for="fUsuarioTelefone">WhatsApp (opcional)</label>
+<input type="tel" id="fUsuarioTelefone" placeholder="11999998888 (DDI + DDD + número)" autocomplete="off" inputmode="numeric">
 </div>
 <div class="field">
 <label for="fUsuarioPermissao">Permissão</label>
