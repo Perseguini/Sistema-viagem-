@@ -14,9 +14,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Perseguini">
 <link rel="stylesheet" href="style.css">
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js" defer></script>
 <style>
   /* ===== Perseguini: splash de entrada + loader do canto ===== */
   .pgn-splash{
@@ -557,7 +557,7 @@
 </div>
 
 <canvas id="renderCanvas" style="display:none;"></canvas>
-<script src="app.js"></script>
+<script src="app.js" defer></script>
 <script>
 (function(){
   var splash = document.getElementById('pgnSplash');
@@ -570,13 +570,11 @@
 
   window.pgnShowLoader();
 
-  window.addEventListener('load', function(){
-    setTimeout(function(){
-      if(splash) splash.classList.add('pgn-hide');
-      window.pgnHideLoader();
-      setTimeout(function(){ if(splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 600);
-    }, 1300);
-  });
+  setTimeout(function(){
+    if(splash) splash.classList.add('pgn-hide');
+    window.pgnHideLoader();
+    setTimeout(function(){ if(splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 600);
+  }, 3000);
 })();
 </script>
 </body>
