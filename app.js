@@ -919,6 +919,8 @@
         email: normalizeEmail(user.email),
         name: getName(),
         trips: trips,
+        frota: frota,
+        usuarios: usuarios,
         updatedAt: new Date().toISOString(),
       });
       setLastSync(user.email);
@@ -955,10 +957,20 @@
       trips = Array.isArray(data.trips) ? data.trips : [];
       saveTrips(trips);
       if (data.name) setName(data.name);
+      if (Array.isArray(data.frota)) {
+        frota = data.frota;
+        saveFrota(frota);
+      }
+      if (Array.isArray(data.usuarios)) {
+        usuarios = data.usuarios;
+        saveUsuarios(usuarios);
+      }
       setLastSync(user.email);
       updateCloudModalStatus();
       renderInicio();
       renderHistorico();
+      renderFrota();
+      renderUsuarios();
       toast("Dados restaurados da nuvem! 🔄");
     } catch (e) {
       console.error("Erro ao restaurar da nuvem:", e);
